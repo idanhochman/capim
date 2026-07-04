@@ -9,7 +9,12 @@ __pycache__/
 .venv/
 venv/
 
+# collected traces + simulation outputs (regenerated from the collect/drive runs)
+traces/
+results/
+
 # editor/OS
 *.swp
 *.swo
 .DS_Store
+*:Zone.Identifier
