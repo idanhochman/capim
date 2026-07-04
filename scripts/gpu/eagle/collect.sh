@@ -27,10 +27,11 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-# Pinned EAGLE (cb7e084) requires transformers>=4.53.1 (its Qwen3 import needs
-# use_kernel_forward_from_hub). Per-method transformers does not affect fairness.
-echo "==> installing EAGLE python deps (transformers >=4.53.1) ..."
-pip install "transformers>=4.53.1" "accelerate>=0.26" bitsandbytes datasets sentencepiece protobuf
+# Pinned EAGLE (cb7e084) needs transformers==4.53.1: its Qwen3 import wants symbols
+# only in >=4.52/4.53 (use_kernel_forward_from_hub) yet also LossKwargs, dropped in
+# later releases, so >= drifts too new and re-breaks. Pin exact. Fairness unaffected.
+echo "==> installing EAGLE python deps (transformers 4.53.1) ..."
+pip install "transformers==4.53.1" "accelerate>=0.26" bitsandbytes datasets sentencepiece protobuf
 
 SIGMA_TH="${SIGMA_TH:--1.5}"
 DATASETS="${DATASETS:-alpaca gsm8k}"
