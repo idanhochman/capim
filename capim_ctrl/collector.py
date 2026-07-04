@@ -351,8 +351,12 @@ def collect(
     One ``Collector`` per prompt (fresh step ids / pending), steps concatenated.  Greedy
     (temperature=0) by default -- the in-loop gate is provably exact there.
     """
+    import time
     import torch
 
+    print(f"[eagle] {dataset}: {len(prompts)} prompts  "
+          f"(sigma_th={sigma_th}, max_new_tokens={max_new_tokens})", flush=True)
+    t0 = time.time()
     all_steps: List[DecodeStep] = []
     for pid, prompt in enumerate(prompts):
         col = Collector(sigma_th=sigma_th, dataset=dataset, prompt_id=pid)
@@ -365,7 +369,12 @@ def collect(
                     max_new_tokens=max_new_tokens,
                 )
         finally:
-            all_steps.extend(col.detach())
+            sp = col.detach()
+        all_steps.extend(sp)
+        mu  = sum(s.tree_size      for s in sp) / len(sp) if sp else 0.0
+        acc = sum(s.accepted_length for s in sp) / len(sp) if sp else 0.0
+        print(f"  [{pid + 1:>3}/{len(prompts)}] {len(sp):>4} steps  "
+              f"μ={mu:4.1f}  accept={acc:4.2f}  ({time.time() - t0:6.1f}s)", flush=True)
 
     trace = Trace(
         steps=all_steps,

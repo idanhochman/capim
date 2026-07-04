@@ -173,12 +173,21 @@ def load_medusa_model(
     from medusa.model.medusa_model import MedusaModel
 
     kwargs: Dict[str, Any] = dict(torch_dtype=torch.float16, device_map={"": 0})
+    # Keep the Medusa heads (+ lm_head) in fp16, never quantized: they are missing
+    # from the base checkpoint so transformers _init_weights random-inits them, and
+    # .normal_() on an int8/4-bit tensor crashes ("normal_kernel_cpu not implemented
+    # for 'Char'"). fp16 heads also mirror EAGLE's fp16 draft head and keep the
+    # confidence scores un-degraded.
+    skip = ["medusa_head", "lm_head"]
     if load_in_4bit:
         kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16, bnb_4bit_quant_type="nf4",
+            llm_int8_skip_modules=skip,
         )
     elif load_in_8bit:
-        kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+        kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_8bit=True, llm_int8_skip_modules=skip,
+        )
 
     model = MedusaModel.from_pretrained(medusa_model_path, **kwargs)
     model.eval()
@@ -358,8 +367,13 @@ def collect(
     (temperature=0) by default -- the in-loop gate is exact-in-practice there.
     ``medusa_generate`` is a generator; we drain it to run the loop to completion.
     """
+    import time
     import torch
 
+    print(f"[medusa] {dataset}: {len(prompts)} prompts  "
+          f"(L={L}, selection={selection}, max_new_tokens={max_new_tokens})", flush=True)
+    t0 = time.time()
+    prev = 0
     col = Collector(L=L, dataset=dataset, selection=selection)
     col.attach(medusa_model)
     try:
@@ -372,6 +386,12 @@ def collect(
                     max_steps=max_new_tokens, medusa_choices=medusa_choices,
                 ):
                     pass                          # drain the generator
+            sp = col._steps[prev:]                # steps this prompt committed
+            prev = len(col._steps)
+            mu  = sum(s.tree_size      for s in sp) / len(sp) if sp else 0.0
+            acc = sum(s.accepted_length for s in sp) / len(sp) if sp else 0.0
+            print(f"  [{pid + 1:>3}/{len(prompts)}] {len(sp):>4} steps  "
+                  f"μ={mu:4.1f}  accept={acc:4.2f}  ({time.time() - t0:6.1f}s)", flush=True)
     finally:
         steps = col.detach()                      # restores patches + static buffer
 
