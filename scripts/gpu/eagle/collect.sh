@@ -27,13 +27,10 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-# EAGLE's vendored modeling imports transformers.modeling_rope_utils (added in
-# 4.43), so the MEDUSA-era 4.36.2 fails with ModuleNotFoundError. Target the
-# [4.43, 4.49] window: >=4.43 for the import, <4.50 to dodge the loader rewrite
-# that breaks quantized loading. Per-method transformers does NOT affect
-# fairness — same Vicuna weights, same precision, same prompts; independent JSON.
-echo "==> installing EAGLE python deps (transformers 4.46.3) ..."
-pip install "transformers==4.46.3" "accelerate==1.0.1" bitsandbytes datasets sentencepiece protobuf
+# Pinned EAGLE (cb7e084) requires transformers>=4.53.1 (its Qwen3 import needs
+# use_kernel_forward_from_hub). Per-method transformers does not affect fairness.
+echo "==> installing EAGLE python deps (transformers >=4.53.1) ..."
+pip install "transformers>=4.53.1" "accelerate>=0.26" bitsandbytes datasets sentencepiece protobuf
 
 SIGMA_TH="${SIGMA_TH:--1.5}"
 DATASETS="${DATASETS:-alpaca gsm8k}"
