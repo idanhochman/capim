@@ -1,0 +1,15 @@
+# Python cruft only -- source, tests, docs, and the sd_repos/ submodules are tracked.
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# editor/OS
+*.swp
+*.swo
+.DS_Store

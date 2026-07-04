@@ -1,0 +1,6 @@
+[submodule "sd_repos/EAGLE"]
+	path = sd_repos/EAGLE
+	url = https://github.com/SafeAILab/EAGLE.git
+[submodule "sd_repos/Medusa"]
+	path = sd_repos/Medusa
+	url = https://github.com/FasterDecoding/Medusa.git
