@@ -28,7 +28,7 @@ This module is the contract ONLY — no model code, no synthetic generators
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List
 
 
@@ -106,6 +106,10 @@ class Trace:
     mean_accepted_length: float = 0.0
     mean_acceptance_rate: float = 0.0   # accepted / tree_size per step, averaged
 
+    # Genuine per-prompt decoded output (causal gating -> real continuation, not a
+    # counterfactual).  One dict per prompt: {"prompt_id", "prompt", "output"}.
+    prompt_outputs: List[Dict] = field(default_factory=list)
+
     def compute_summary(self) -> None:
         if not self.steps:
             return
@@ -127,6 +131,7 @@ class Trace:
             "mean_tree_size": self.mean_tree_size,
             "mean_accepted_length": self.mean_accepted_length,
             "mean_acceptance_rate": self.mean_acceptance_rate,
+            "prompt_outputs": self.prompt_outputs,
             "steps": [
                 {
                     "step_id": s.step_id,
@@ -195,4 +200,5 @@ class Trace:
             mean_tree_size=data.get("mean_tree_size", 0.0),
             mean_accepted_length=data.get("mean_accepted_length", 0.0),
             mean_acceptance_rate=data.get("mean_acceptance_rate", 0.0),
+            prompt_outputs=data.get("prompt_outputs", []),
         )

@@ -222,13 +222,15 @@ class Collector:
     """Attach to an ``EaModel`` to record a gated (or ungated) EAGLE-2 ``Trace``.
 
     Usage (on the GPU box):
-        col = Collector(sigma_th=-1.5, dataset="alpaca", prompt_id=0)
+        col = Collector(tokenizer, sigma_th=-1.5, dataset="alpaca", prompt_id=0)
         col.attach(ea_model)
         ea_model.eagenerate(input_ids, temperature=0, top_p=0, top_k=0, max_new_tokens=200)
         steps = col.detach()          # list[DecodeStep] for this prompt
     """
 
-    def __init__(self, sigma_th: float, dataset: str = "unknown", prompt_id: int = 0):
+    def __init__(self, tokenizer: Any, sigma_th: float, dataset: str = "unknown",
+                 prompt_id: int = 0):
+        self.tokenizer = tokenizer
         self.sigma_th = sigma_th
         self.dataset = dataset
         self.prompt_id = prompt_id
@@ -289,12 +291,16 @@ class Collector:
                 draft_token_ids, retrieve_rows, tree_mask_rows, tree_pos, cum_scores,
                 col.sigma_th,
             )
+            for n in nodes:
+                n.token_str = col.tokenizer.decode([n.token_id])
+            sample_token_id = int(input_ids[0, -1].item())
             col._pending = dict(
                 nodes=nodes,
                 edited_rows=edited_rows,
                 new_index_of=new_index_of,
                 context_length=int(input_ids.shape[1]),
-                sample_token_id=int(input_ids[0, -1].item()),
+                sample_token_id=sample_token_id,
+                sample_token_str=col.tokenizer.decode([sample_token_id]),
             )
 
             if edited_rows == retrieve_rows:
@@ -326,6 +332,7 @@ class Collector:
                     dataset=col.dataset,
                     prompt_id=col.prompt_id,
                     sample_token_id=p["sample_token_id"],
+                    sample_token_str=p["sample_token_str"],
                 ))
                 col._step_id += 1
                 col._pending = None
@@ -358,18 +365,24 @@ def collect(
           f"(sigma_th={sigma_th}, max_new_tokens={max_new_tokens})", flush=True)
     t0 = time.time()
     all_steps: List[DecodeStep] = []
+    prompt_outputs: List[Dict] = []
     for pid, prompt in enumerate(prompts):
-        col = Collector(sigma_th=sigma_th, dataset=dataset, prompt_id=pid)
+        col = Collector(tokenizer, sigma_th=sigma_th, dataset=dataset, prompt_id=pid)
         col.attach(ea_model)
         try:
             inputs = tokenizer(prompt, return_tensors="pt").to(ea_model.base_model.device)
+            input_len = inputs["input_ids"].shape[1]
             with torch.no_grad():
-                ea_model.eagenerate(
+                output_ids = ea_model.eagenerate(
                     inputs["input_ids"], temperature=temperature, top_p=0, top_k=0,
                     max_new_tokens=max_new_tokens,
                 )
+            output_text = tokenizer.decode(
+                output_ids[0, input_len:], skip_special_tokens=True,
+            )
         finally:
             sp = col.detach()
+        prompt_outputs.append({"prompt_id": pid, "prompt": prompt, "output": output_text})
         all_steps.extend(sp)
         mu  = sum(s.tree_size      for s in sp) / len(sp) if sp else 0.0
         acc = sum(s.accepted_length for s in sp) / len(sp) if sp else 0.0
@@ -378,6 +391,7 @@ def collect(
 
     trace = Trace(
         steps=all_steps,
+        prompt_outputs=prompt_outputs,
         model=model_name,
         sd_method="eagle2",
         metadata=dict(

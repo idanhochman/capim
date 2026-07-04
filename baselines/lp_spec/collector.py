@@ -33,9 +33,10 @@ cold start happens once.  Re-costing: feed the gated ``Trace`` to the driver wit
 ``L_spec`` (>= full tree) -- the DTP then keeps every recorded node (pass-through, like
 CAPIM's sigma=-inf), so cost depends only on the recorded gated ``mu = |nodes|``.
 
-Recorded MEDUSA nodes carry STRUCTURE + ``accepted`` only (token_id / cumulative_log_prob
-are left 0.0): the LP-Spec driver's DTP keys solely on depth / layer_idx / parent_idx /
-accepted, and the cost model on the node count.
+The LP-Spec driver's DTP keys solely on depth / layer_idx / parent_idx / accepted, and the
+cost model on the node count -- so ``cumulative_log_prob`` stays 0.0 (MEDUSA has no live
+per-node confidence).  The real ``token_id`` / ``token_str`` ARE recorded (from
+``tree_candidates``) for readable traces; nothing in the driver reads them.
 
 Layering mirrors the EAGLE collector: the tree math is pure torch-free functions
 (unit-testable with plain lists); torch / transformers / medusa imports are LOCAL to the
@@ -202,7 +203,9 @@ class Collector:
     per-prompt ``medusa_generate`` calls.
     """
 
-    def __init__(self, L: int = 4, dataset: str = "unknown", selection: str = "greedy_headk"):
+    def __init__(self, tokenizer: Any, L: int = 4, dataset: str = "unknown",
+                 selection: str = "greedy_headk"):
+        self.tokenizer = tokenizer
         self.L = L
         self.dataset = dataset
         self.selection = selection
@@ -291,11 +294,22 @@ class Collector:
             retrieve_indices.copy_(torch.tensor(
                 edited_rows, dtype=retrieve_indices.dtype, device=retrieve_indices.device,
             ))
+            result = orig(medusa_logits, logits, tree_indices, retrieve_indices, *args, **kwargs)
+
+            # tree_candidates[0] holds the drafted token id per node index (0 = root/
+            # sampled token), same sorted space as col._meta -> fill real ids + strings.
+            tree_tok = result[1][0].tolist()
+            for v, pos in new_index_of.items():
+                kept_nodes[pos].token_id = int(tree_tok[v])
+                kept_nodes[pos].token_str = col.tokenizer.decode([tree_tok[v]])
+            sample_token_id = int(tree_tok[0])
             col._pending = dict(
                 kept_nodes=kept_nodes, edited_rows=edited_rows,
                 new_index_of=new_index_of, context_length=0,
+                sample_token_id=sample_token_id,
+                sample_token_str=col.tokenizer.decode([sample_token_id]),
             )
-            return orig(medusa_logits, logits, tree_indices, retrieve_indices, *args, **kwargs)
+            return result
 
         return wrapper
 
@@ -329,6 +343,8 @@ class Collector:
                     accepted_length=int(accept_length),   # raw draft accepts; driver adds bonus
                     dataset=col.dataset,
                     prompt_id=col.prompt_id,
+                    sample_token_id=p["sample_token_id"],
+                    sample_token_str=p["sample_token_str"],
                 )
                 col._steps.append(step)
                 # causal update: fold THIS step's verified accepts in, STATIC kp/pp
@@ -374,18 +390,22 @@ def collect(
           f"(L={L}, selection={selection}, max_new_tokens={max_new_tokens})", flush=True)
     t0 = time.time()
     prev = 0
-    col = Collector(L=L, dataset=dataset, selection=selection)
+    prompt_outputs: List[Dict] = []
+    col = Collector(tokenizer, L=L, dataset=dataset, selection=selection)
     col.attach(medusa_model)
     try:
         for pid, prompt in enumerate(prompts):
             col.set_prompt(pid)
             inputs = tokenizer(prompt, return_tensors="pt").to(medusa_model.base_model.device)
+            last = None
             with torch.no_grad():
-                for _ in medusa_model.medusa_generate(
+                for out in medusa_model.medusa_generate(
                     inputs["input_ids"], temperature=temperature,
                     max_steps=max_new_tokens, medusa_choices=medusa_choices,
                 ):
-                    pass                          # drain the generator
+                    last = out                    # keep the last yield (cumulative text)
+            output_text = last["text"] if last else ""
+            prompt_outputs.append({"prompt_id": pid, "prompt": prompt, "output": output_text})
             sp = col._steps[prev:]                # steps this prompt committed
             prev = len(col._steps)
             mu  = sum(s.tree_size      for s in sp) / len(sp) if sp else 0.0
@@ -397,6 +417,7 @@ def collect(
 
     trace = Trace(
         steps=steps,
+        prompt_outputs=prompt_outputs,
         model=model_name,
         sd_method="medusa",
         metadata=dict(
