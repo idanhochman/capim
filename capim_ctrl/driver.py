@@ -24,6 +24,7 @@ sequencer); common/ only costs the tagged layers.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 from common.config import ModelConfig
 from common.devices.npu import MobileNPU
@@ -73,8 +74,12 @@ class CapimConfig:
     sigma_th: float = float("-inf")    # cumulative-log-prob gate (-inf on a gated trace)
     mu_th: int = 4                     # binary route threshold / speed<->energy mode dial
     all_npu: bool = False              # True -> EAGLE-2/NPU ablation
-    concurrent_verify: bool = True     # mu>=mu_th -> FC column-split NPU||PIM (attn PIM-pinned)
+    concurrent_verify: bool = True     # mu>=mu_th -> every GEMM column-split NPU||PIM
     draft_device: Dev = Dev.PIM        # where draft FC/attn run (NL always NPU)
+    split_attention: Optional[bool] = None  # None -> follow route() (attention follows mu_th, the
+                                       # default).  Set False to PIN attention to PIM on the
+                                       # concurrent route (the old Attn-PIM rule), True to force the
+                                       # split.  Ablation override only; do not set in normal runs.
     name: str = "CAPIM"
 
 
@@ -165,7 +170,8 @@ def drive(model: ModelConfig, trace: Trace, config: CapimConfig = None,
             plan = route(mu, config.mu_th, config.concurrent_verify)
             fc_dev = plan.fc_device
             exec_model = plan.exec_model
-            split_attention = plan.split_attention
+            split_attention = (plan.split_attention if config.split_attention is None
+                               else config.split_attention)
             router = router_capim_verify(fc_dev)
 
         # 4. verify: build + tag (driver policy), then cost via common (mechanism)
