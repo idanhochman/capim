@@ -49,12 +49,14 @@ def cmd_collect(args: argparse.Namespace) -> None:
         model, tokenizer = load_eagle_model(
             args.base_model, args.ea_model,
             load_in_8bit=load_in_8bit, load_in_4bit=load_in_4bit,
+            total_token=args.total_token,
         )
         trace = collect(
             model, tokenizer, formatted,
             dataset=dataset, sigma_th=args.sigma_th,
             max_new_tokens=args.max_new_tokens,
             draft_head=args.ea_model,
+            total_token=args.total_token,
         )
     else:
         from baselines.lp_spec.collector import collect, load_medusa_model
@@ -80,14 +82,59 @@ def cmd_collect(args: argparse.Namespace) -> None:
 # drive
 # --------------------------------------------------------------------------
 
+def _collection_mode(trace: Trace) -> str:
+    """Which budget RULE causally shaped this trace's tree -- the curve a plot puts it on.
+
+    Three rules select nodes from the SAME cumulative-log-prob ordering, differing only
+    in how the cardinality is fixed:
+      "gated"  EAGLE + finite sigma_th: keep {cum >= sigma}, so k is chosen by the
+               CONTEXT.  (Because cum is monotone-decreasing with depth, this set is
+               exactly the top-k of that ordering -- and is ancestor-closed for free.)
+      "topm"   EAGLE + sigma_th = -inf: no gate, so the tree is whatever EAGLE-2's own
+               rerank keeps -- the top total_token-1 nodes.  This is the FIXED-BUDGET
+               CONTROL for "gated": same drafter, same ranking, m fixed instead of
+               adaptive.  Note the shipped default (total_token=60, mu=59) means the old
+               'ungated full tree' traces ARE the m=59 point of this curve, for free.
+      "medusa" MEDUSA + DTP keep-count L (LP-Spec): a different drafter AND ranking.
+    """
+    md = trace.metadata or {}
+    method = trace.sd_method or md.get("sd_method") or ""
+    if method.startswith("eagle"):
+        return "topm" if md.get("sigma_th", NEG_INF) == NEG_INF else "gated"
+    if method == "medusa":
+        return "medusa"
+    return "unknown"
+
+
+def _collection_gate(trace: Trace) -> float:
+    """The value of the swept knob this trace was CAUSALLY collected at, per its mode:
+    sigma_th (gated), the node budget m (topm), or L (medusa).  This is the x-axis of
+    the frontier/budget figures, and (unlike config.sigma_th, which is -inf for
+    replay-as-gated) it is the value that actually shaped the tree.  Old traces carry
+    no total_token, which is correct: they were run at EAGLE-2's default 60 -> m=59."""
+    md = trace.metadata or {}
+    mode = _collection_mode(trace)
+    if mode == "gated":
+        return float(md["sigma_th"])
+    if mode == "topm":
+        return float(md.get("total_token", 60) - 1)     # nodes kept == total_token-1
+    if mode == "medusa":
+        return float(md.get("L", round(trace.mean_tree_size)))
+    return float("nan")
+
+
 def _trace_stats(trace: Trace) -> dict:
     """Trace-level summary stats echoed into every drive record (for the table).
     These describe the underlying trace, not the driver run, so they are identical
-    across a driver's knob sweep on the same trace."""
+    across a driver's knob sweep on the same trace.  (collection_mode, collection_gate)
+    makes each record self-describing -- which curve, and where on it -- so plots never
+    parse filenames."""
     return dict(
         mean_tree_size=trace.mean_tree_size,
         mean_accepted_length=trace.mean_accepted_length,
         mean_acceptance_rate=trace.mean_acceptance_rate,
+        collection_mode=_collection_mode(trace),
+        collection_gate=_collection_gate(trace),
     )
 
 
@@ -193,7 +240,13 @@ def build_parser() -> argparse.ArgumentParser:
     pc.add_argument("--max-new-tokens", type=int, default=200)
     pc.add_argument("--sigma-th", type=float, default=-1.5,
                     help="EAGLE cumulative-log-prob gate threshold (--method eagle); "
-                         "-inf records the ungated full tree")
+                         "-inf records the fixed-budget tree with no gate")
+    pc.add_argument("--total-token", type=int, default=60,
+                    help="EAGLE rerank budget (--method eagle): the draft tree is capped "
+                         "at total_token-1 nodes, so mu == total_token-1 exactly. The "
+                         "default 60 is EAGLE-2's shipped budget (mu=59). Combine with "
+                         "--sigma-th=-inf to collect the fixed-top-m CONTROL that isolates "
+                         "the gate (adaptive k) from the drafter (same ranking, fixed m)")
     pc.add_argument("--L", type=int, default=4,
                     help="MEDUSA DTP keep count (--method medusa)")
     pc.add_argument("--base-model", default="lmsys/vicuna-7b-v1.3")

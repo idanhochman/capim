@@ -352,11 +352,16 @@ def collect(
     model_name: str = "Vicuna-7B-v1.3",
     draft_head: str = "yuhuili/EAGLE-Vicuna-7B-v1.3",
     temperature: float = 0.0,
+    total_token: int = 60,
 ) -> Trace:
     """Run gated EAGLE-2 over ``prompts`` and return a single ``Trace``.
 
     One ``Collector`` per prompt (fresh step ids / pending), steps concatenated.  Greedy
     (temperature=0) by default -- the in-loop gate is provably exact there.
+
+    ``total_token`` must be the SAME value ``load_eagle_model`` was given: it is recorded
+    only so the trace is self-describing (it caps the tree at ``total_token-1`` nodes,
+    which with ``sigma_th=-inf`` is the fixed-top-m control -- see ``_collection_mode``).
     """
     import time
     import torch
@@ -397,7 +402,7 @@ def collect(
         metadata=dict(
             dataset=dataset, sigma_th=sigma_th, temperature=temperature,
             draft_head=draft_head, n_prompts=len(prompts), max_new_tokens=max_new_tokens,
-            gated=(sigma_th != NEG_INF),
+            gated=(sigma_th != NEG_INF), total_token=total_token,
         ),
     )
     trace.compute_summary()
