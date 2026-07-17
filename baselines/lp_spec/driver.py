@@ -3,7 +3,8 @@ LP-Spec baseline driver — MEDUSA + retrospective DTP (trace-replay) + concurre
 NPU||PIM verification.
 
 Per decode step, replayed from a MEDUSA trace:
-  1. DRAFT  : K=5 MEDUSA heads, one parallel shot on the NPU ("free tail").
+  1. DRAFT  : K=5 MEDUSA heads, one parallel shot off a single hidden state (no
+              attention, no KV), DAU column-split NPU||PIM like every other GEMM.
   2. SELECT : the DTP picks which nodes to verify from a retrospective per-(head, k)
               acceptance histogram (`dtp`).  Content-blind counterpart to CAPIM's
               live σ_th gate — same greedy ∏ p construction, but the accuracies come
@@ -33,6 +34,7 @@ from common.devices.pim import LPDDR5PIM
 from common.model import build_decoder_layer, build_lm_head, build_medusa_draft
 from common.schema import DecodeStep, Trace
 from common.system import (
+    compose_concurrent,
     DriverResult,
     StepRecord,
     compose_sequential,
@@ -75,13 +77,28 @@ def drive(model: ModelConfig, trace: Trace, config: LPSpecConfig = None,
         kp = dtp.k_pred_map(step)
         pp = dtp.parent_pos_map(step)
 
-        # 1. MEDUSA draft: K heads off one hidden state on the NPU.  Algorithmically
-        #    parallel (no inter-head dependency) but each streams its own weights and
-        #    all are memory-bound on the shared external bus, so they serialize on
-        #    bandwidth -> additive composition is the correct model, not an approx.
-        heads = tag(build_medusa_draft(model, medusa_num_heads=config.medusa_num_heads),
-                    router_all_npu)
-        draft = compose_sequential(heads, npu, pim)
+        # 1. MEDUSA draft: K heads fired off one hidden state (no inter-head dependency,
+        #    no attention, no KV), composed CONCURRENTLY -- the DAU column-splits their
+        #    FC weights across NPU||PIM exactly as it does the backbone's.
+        #
+        #    CORRECTED 2026-07-12 (was pinned all-NPU + composed sequentially).  The heads
+        #    are ordinary FC layers over model parameters -- neither prefill nor nonlinear
+        #    -- and LP-Spec puts only those two on the NPU:
+        #      §VI-A "Prefill stage of LLM inference and nonlinear functions are executed
+        #             on the NPU."
+        #      §V-C  "During NPU computation, model parameters are fetched from DRAM ranks,
+        #             while PIM computation utilizes parameters stored in PIM ranks."
+        #    The old all-NPU pin streamed all 740 MB of head weight over the external bus
+        #    every iteration -- 57% of iteration latency and 32% of its energy -- which
+        #    handicapped the baseline, and did so asymmetrically, since CAPIM's EAGLE draft
+        #    is PIM-resident.  With this fix the driver reproduces LP-Spec's published
+        #    throughput to 1.02x (74.8 vs 73.4 token/s at L=8, Alpaca).
+        #    See scripts/cpu/validate_cost_model.py.
+        #
+        #    No split_attention argument: the draft emits no MATMUL, so the flag is a
+        #    no-op.  No tag() either -- compose_concurrent reads no layer.device.
+        heads = build_medusa_draft(model, medusa_num_heads=config.medusa_num_heads)
+        draft = compose_concurrent(heads, npu, pim)
 
         # 2. DTP select (causal: history < t only; step 0 = full-tree cold start)
         kept = dtp.select_kept(step, t, config.L_spec, config.selection, hist, kp, pp)
