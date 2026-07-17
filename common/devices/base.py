@@ -17,11 +17,11 @@ from common.model import Layer
 # Energy-vector slot names (4 slots, mobile).  Structure follows PAPI's 6-vector
 # [off_mem, L2, L1, reg, flop, comm] (src/devices.py:_get_energy), trimmed for a
 # mobile NPU/PIM with no cache hierarchy:
-#   off_mem : DRAM/memory-access energy — off-chip bus on the NPU (5.47 pJ/bit),
-#             cheap internal near-bank access on PIM (0.8 pJ/bit).
+#   off_mem : DRAM/memory-access energy — the dear off-chip bus on the NPU vs cheap
+#             internal near-bank access on PIM (rates: config.MEM_{OFFCHIP,INTERNAL}).
 #   on_chip : PAPI's L2+L1+reg tiling, collapsed to one slot; unused (=0) here
 #             (no mobile cache hierarchy; second-order at batch=1 GEMV).
-#   alu     : arithmetic-datapath energy = (flops/2) × pJ_per_INT8_MAC.
+#   alu     : arithmetic-datapath energy = (flops/2) × config.{PIM,NPU}_MAC_PJ_PER_OP.
 #   comm    : PIM<->NPU crossing over the external bus (charged on the PIM side).
 E_OFF, E_ONCHIP, E_ALU, E_COMM = 0, 1, 2, 3
 ENERGY_SLOTS = ("off_mem", "on_chip", "alu", "comm")

@@ -10,10 +10,11 @@ COMPUTE term: m=1..4 all cost one pass.  This is the batch=1 / small-tree regime
 Only FC / MATMUL / COMM run on PIM; nonlinear ops route to the NPU (the cross-bank
 reduction wall) and are asserted out in cost().
 
-Per the LPDDR5-PIM ridge point (409.6 GOPS / 51.2 TB/s = 0.008 ops/byte), GEMV
-(intensity 2 ops/byte >> ridge) is COMPUTE-bound on PIM, so this normally reduces
-to flops/GOPS — but the full max() is kept so the bound tag is computed, not
-assumed.  PAPI's "GEMM = reuse(=m) × GEMV" is implicit: flops already carries m.
+The PIM ridge point (PIM_INT8_GOPS / PIM_INTERNAL_BW, both in config.py) sits far
+below GEMV's arithmetic intensity of 2 ops/byte, so GEMV is COMPUTE-bound on PIM and
+this normally reduces to flops/GOPS — but the full max() is kept so the bound tag is
+computed, not assumed.  PAPI's "GEMM = reuse(=m) × GEMV" is implicit: flops already
+carries m.
 
 COMM (the PIM<->NPU handoff) is costed here on the external bus (51.2 GB/s):
   time = FIXED_CROSSING_LATENCY_S + bytes / PIM_EXTERNAL_BW
