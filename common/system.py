@@ -17,9 +17,10 @@ identical Device.cost(), so the comparison stays fair.
     the NPU.  `split_attention` distinguishes the two users:
       * True  → LP-Spec: attention MATMULs are column-split too (PIM's KV slice is
         gathered each kernel).
-      * False → CAPIM's verify when μ ≥ μ_th: FC is split NPU||PIM but attention
-        stays PIM-pinned (KV-cache ~134 MB never crosses the bus), overlapping the
-        FC makespan on the PIM side.
+      * False → the Attn-PIM ablation: FC is split NPU||PIM but attention stays
+        PIM-pinned (its KV slice never crosses the bus), overlapping the FC makespan
+        on the PIM side.  NOT CAPIM's default — attention follows μ_th like every
+        other GEMM (CapimConfig.split_attention=None); this flag is an override.
 """
 
 from __future__ import annotations
@@ -130,8 +131,8 @@ def compose_concurrent(layers: List[Layer], npu: MobileNPU, pim: LPDDR5PIM,
     `split_attention`:
       - True  (LP-Spec): attention MATMULs are column-split like every other GEMM,
         so PIM's KV slice is gathered over the external bus each kernel.
-      - False (CAPIM large-tree verify): attention stays PIM-pinned and overlaps the
-        split FC kernels — the KV-cache (~134 MB) never crosses the bus.  Added to
+      - False (Attn-PIM ablation, NOT CAPIM's default): attention stays PIM-pinned and
+        overlaps the split FC kernels — its KV slice never crosses the bus.  Added to
         t_compute (it shares the verify critical path) but charged NO gather/crossing.
 
     Balance (derived from LP-Spec's "synchronize NPU and PIM" prose, §V-B; the paper
