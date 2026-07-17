@@ -1,0 +1,596 @@
+%%%%%%%%%%%%%%%%%%%%%%%Preamble%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{fontspec}
+\setmainfont{Arial}
+\usepackage{graphicx}
+\usepackage[table]{xcolor}
+\usepackage{array}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{parskip}   
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{microtype}
+\usepackage{lipsum}  
+\usepackage{etoolbox}
+\usepackage{cite}
+\usepackage{tocloft}
+\renewcommand{\cftsecnumwidth}{2cm}
+\renewcommand{\cftsecaftersnum}{: }
+\renewcommand{\cftsecpagefont}{\normalfont\bfseries}
+\renewcommand{\cftsecpresnum}{Chapter\ }
+\usepackage{caption}
+\usepackage{ifthen}
+\usepackage{float}
+\usepackage[intoc]{nomencl}
+\makenomenclature
+\usepackage{titlesec}
+\usepackage{chngcntr}
+\titleformat{\section}
+  {\centering\normalfont\Large\bfseries}
+  {Chapter \thesection :}{1em}{}
+\patchcmd{\listoffigures}{\section*{\listfigurename}}{\section*{\centering \listfigurename}}{}{}
+\patchcmd{\listoftables}{\section*{\listtablename}}{\section*{\centering \listtablename}}{}{}
+\renewcommand{\cftdotsep}{1.5}
+\renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}}
+\renewcommand{\cftfigleader}{\cftdotfill{\cftdotsep}}
+\renewcommand{\cfttableader}{\cftdotfill{\cftdotsep}}
+\renewcommand{\contentsname}{Table of Contents}
+\renewcommand{\nomname}{\centering List of Symbols}
+\renewcommand{\cftfigpresnum}{Figure~}
+\renewcommand{\cftfigaftersnum}{\hspace{0.5em}}
+\renewcommand{\cfttabpresnum}{Table~}
+\renewcommand{\cfttabaftersnum}{\hspace{0.5em}} 
+\settowidth{\cftfignumwidth}{Figure 10\quad}
+\settowidth{\cfttabnumwidth}{Table 10\quad}
+\renewcommand{\cfttoctitlefont}{\hfill\Large\bfseries}
+\renewcommand{\cftaftertoctitle}{\hfill\textnormal{\textbf{Page}}}
+\renewcommand{\cftloftitlefont}{\hfill\Large\bfseries}
+\renewcommand{\cftafterloftitle}{\hfill\textnormal{\textbf{Page}}}
+\renewcommand{\cftlottitlefont}{\hfill\Large\bfseries}
+\renewcommand{\cftafterlottitle}{\hfill\textnormal{\textbf{Page}}}
+\captionsetup[figure]{labelsep=space}
+\captionsetup[table]{labelsep=space}
+\usepackage[hidelinks]{hyperref}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%Document Start%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+
+% ---------- Title Page ----------
+\begin{titlepage}
+\begingroup
+\setmainfont{Times New Roman}
+\fontsize{16}{19}\selectfont
+\begin{flushright}
+  \includegraphics[width=0.4\textwidth]{Figures/kcl.png}
+\end{flushright}
+
+\vspace*{1cm}
+
+\begin{center}
+    {\textbf{King’s College London}}\\[1.5cm]
+    {\fontsize{18}{21}\selectfont \textbf{CAPIM: Confidence-Aware PIM-based Architecture for LLM Inference on Mobile Devices}}\\[1cm]
+    {\textbf{Submitted by:}}\\[0.1cm]
+    {\textbf{Idan Hochman}}\\[0.1cm]
+    {\textbf{k-number}}\\[1cm]
+    {\textbf{Project Report Submitted in Partial Fulfillment of the Requirements of the MSc Project Module}}\\[1cm]
+    {\textbf{Engineering Department}}\\[1cm]
+    {\textbf{Supervised by:}}\\[0.3cm]
+    {\textbf{Dr. Haiyu Mao}}\\[2cm]
+    {\textbf{London}}\\[0.2cm]
+    {\textbf{August 2026}}
+\end{center}
+\endgroup
+\end{titlepage}
+\pagenumbering{roman}
+
+
+% ---------- Abstract Section ----------
+
+\newpage
+\section*{\centering Abstract}
+\addcontentsline{toc}{section}{Abstract}
+
+The deployment of Large Language Models (LLMs) on mobile and edge devices is constrained by strict energy budgets, minimal computational resources and limited memory bandwidth. While Processing-In-Memory (PIM) architectures and speculative decoding (SD) techniques have shown potential in mitigating these limitations, existing mobile PIM-based solutions rely on static speculation structures and retrospective pruning, leading to unnecessary computation, energy waste, and avoidable latency. Recent SD techniques, particularly EAGLE-2, demonstrate that model confidence scores can significantly improve decoding efficiency. However, no mobile PIM architecture has been designed to natively exploit this capability.
+
+This project investigates whether model confidence can be leveraged as a real-time hardware control signal to enable energy-efficient and low-latency LLM inference on mobile devices. The problem is timely and relevant due to the rapid growth of on-device generative AI applications and the increasing demand for privacy-preserving, low-latency inference without reliance on cloud infrastructure.
+
+To address this challenge, the project proposes CAPIM, a confidence-aware PIM-based architecture that integrates the state-of-the-art EAGLE-2 speculative decoding method. Live model confidence scores are used to dynamically prune speculative draft trees and to guide a runtime scheduling policy that determines whether verification is performed locally in PIM or offloaded to a Neural Processing Unit (NPU).
+
+The proposed architecture will be evaluated using architectural simulation based on an LPDDR PIM model, with Qwen2.5 models serving as representative workloads.
+
+The study aims to demonstrate a 20--30\% reduction in energy consumption and a 1.5x--2x latency improvement over state-of-the-art mobile PIM baselines, validating confidence-aware hardware control as an effective approach for efficient on-device LLM inference.
+
+
+% ---------- Table of Contents ----------
+
+\newpage
+\begin{spacing}{1.5}
+  \addcontentsline{toc}{section}{Table of Contents}
+  \tableofcontents
+\end{spacing}
+
+
+
+% ---------- List of Tables ----------
+\newpage
+\section*{\centering \normalsize \listoftables}
+\addcontentsline{toc}{section}{List of Tables}
+
+
+% ---------- List of Figures ----------
+\newpage
+\section*{\centering\normalsize\listoffigures}
+\addcontentsline{toc}{section}{List of Figures}
+
+% ---------- List of Symbols ----------
+\newpage
+
+% Group headings for the List of Symbols (Acronyms then Notation)
+\renewcommand{\nomgroup}[1]{%
+  \ifthenelse{\equal{#1}{A}}{\item[\textbf{Acronyms}]}{%
+  \ifthenelse{\equal{#1}{B}}{\bigskip\item[\textbf{Notation}]}{}}%
+}
+
+% ---- Acronyms ----
+\nomenclature[a-LLM]{LLM}{Large Language Model}
+\nomenclature[a-PIM]{PIM}{Processing-In-Memory}
+\nomenclature[a-SD]{SD}{Speculative Decoding}
+\nomenclature[a-SRAM]{SRAM}{Static Random Access Memory}
+\nomenclature[a-DRAM]{DRAM}{Dynamic Random Access Memory}
+\nomenclature[a-NVM]{NVM}{Non-volatile Memory}
+\nomenclature[a-NPU]{NPU}{Neural Processing Unit}
+\nomenclature[a-GPU]{GPU}{Graphics Processing Unit}
+\nomenclature[a-TPU]{TPU}{Tensor Processing Unit}
+\nomenclature[a-LPDDR]{LPDDR}{Low-power Double Data Rate}
+
+% ---- Notation ----
+\nomenclature[b-sigma]{$\sigma_{th}$}{Model confidence score threshold}
+\nomenclature[b-mu]{$\mu_{th}$}{Candidate token tree size threshold}
+
+\printnomenclature
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% ---------- Acknowledgements ----------
+\newpage
+\section*{\centering Acknowledgements}
+\addcontentsline{toc}{section}{Acknowledgements}
+
+Thank whomever you wish if you wish or simply remove.
+
+% ---------- Main body starts here ----------
+\newpage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+
+% ---------- Introduction ----------
+\section{Introduction}
+
+\subsection{Background}
+Large Language Models (LLMs) have become highly successful and widely adopted. However, running them on mobile and edge devices typically requires communicating with a cloud server where inference is performed. Enabling on-device LLM inference would provide several advantages, including improved response times, expanded service capabilities, and enhanced user data privacy. Despite these benefits, deploying LLMs on mobile platforms remains challenging due to limited memory capacity, constrained computational resources, and strict energy budgets. Overcoming these obstacles requires exploring new techniques and architectural approaches to optimize LLM inference.
+
+One promising direction is Processing-In-Memory (PIM). PIM is a data-centric computing paradigm designed to alleviate the performance and energy bottlenecks found in traditional processor-centric architectures. PIM achieves this by performing computation directly within or near memory, reducing the costly data movement inherent in conventional systems~\cite{mutlu2025primer}.
+
+Another complementary direction involves leveraging parallelism through Speculative Decoding (SD). This technique generally employs a smaller draft model to rapidly generate a sequence of candidate tokens, which the larger target model then verifies in parallel~\cite{leviathan2023speculative}. By doing so, SD mitigates the inefficiencies caused by the inherently sequential nature of autoregressive LLM inference.
+
+Previous work, including PAPI~\cite{he2025papi} and LP-Spec~\cite{he2025lpspec}, introduced PIM-based architectures that use parallelism techniques like SD to efficiently schedule and distribute computation between PIM units and processing units.
+
+\subsection{Problem Statement}
+Recent mobile-oriented PIM architectures, most notably LP-Spec~\cite{he2025lpspec}, employ MEDUSA for SD. MEDUSA uses a static tree-based drafting mechanism that generates a candidate tree and verifies all branches in parallel~\cite{cai2024medusa}. Because this verification process is energy-intensive, LP-Spec adds a post-hoc pruning mechanism that removes unlikely branches based on historical statistics. However, this still forces the hardware to generate many low-probability branches only to discard them afterward, resulting in unnecessary energy expenditure.
+
+More recent SD approaches, particularly EAGLE-2, achieve significantly higher acceptance rates and speedups by using feature-level autoregression and confidence-aware dynamic draft trees~\cite{li2024eagle2}. Yet, no existing mobile PIM architecture has been designed to natively support EAGLE-2 or to utilize its live confidence scores as a real-time hardware control signal.
+
+\subsection{Proposed Solution}
+This project proposes CAPIM, a confidence-aware PIM-based architecture for LLM inference on mobile devices. The proposed architecture integrates the state-of-the-art EAGLE-2 SD method and leverages its internal model confidence score. During the drafting phase, the system monitors live confidence scores and dynamically terminates low-confidence branches, preventing unnecessary speculative computation at its source. In addition, a confidence-aware dynamic scheduler routes verification workloads between the PIM unit and the NPU based on the size of the generated draft tree, enabling a low-power short-circuit path when speculation confidence is low.
+
+The architecture will be evaluated using architectural simulation and aims to achieve a 20--30\% reduction in energy consumption and a 1.5x--2x latency and accuracy improvement over state-of-the-art mobile PIM baselines.
+
+\subsection{Report Outline}
+The rest of this report is organized as follows. Chapter 2 reviews the relevant literature on PIM, PIM-based architectures and SD techniques. Chapter 3 defines the research problem and objectives. Chapter 4 details the methodology, including the proposed system architecture and the simulation framework. Chapter 5 presents the evaluation metrics, benchmarks, and expected system behaviour. Finally, Chapter 6 concludes the report with a summary of contributions and implications for future work.
+
+% ---------- Chapter Two ----------
+\newpage
+\section{Literature Review}
+
+\subsection{Processing-In-Memory (PIM)}
+PIM is a data-centric computing paradigm designed to overcome the performance and energy bottlenecks of traditional processor-centric systems. The core principle of PIM is placing computation mechanisms directly inside or near where data is stored, rather than moving data to a central processor, like traditional computer architectures. Data movement is a key bottleneck for data-intensive domains, such as machine learning and genome analysis, in terms of energy and latency costs. PIM architectures aim to mitigate those costs by eliminating the need for data movement~\cite{mutlu2025primer}.
+
+This bottleneck is structural and worsening. Conventional systems are processor-centric: they are designed to move data to computation, yet the cost of moving data, especially between off-chip memory and the on-chip processor, far exceeds the cost of the computation itself in terms of energy, latency and bandwidth. The imbalance is a direct consequence of technology scaling. Between 1999 and 2017, DRAM capacity improved by roughly 128x, but memory bandwidth improved by only about 20x, while memory latency remained nearly constant, improving by only around 30\% over two decades~\cite{mutlu2025primer}. The resulting ``memory wall'' is especially punishing for mobile and edge workloads, where data movement dominates the energy budget. For widely-used mobile consumer workloads, more than 62\% of the total system energy of a mobile device is spent on data movement between the processor and the memory hierarchy, and for large commercial edge neural-network models running on modern edge accelerators, more than 90\% of the system energy is consumed by memory~\cite{mutlu2025primer}. On-device LLM inference is an even more memory-intensive instance of this same problem, as it is dominated by a sequential, memory-bound decoding stage. This makes reducing data movement, rather than accelerating computation, the primary lever for energy efficiency in battery-constrained deployment.
+
+PIM designs fall into two broad categories~\cite{mutlu2025primer}. Processing-Using-Memory (PUM) exploits the analog operational principles of the memory circuitry itself to perform massively parallel operations in situ, such as bulk copy, bitwise Boolean logic and simple arithmetic within the memory arrays. Processing-Near-Memory (PNM) instead adds explicit compute logic, such as accelerators, simple cores or reconfigurable units, close to the memory arrays, for example in the logic layer of a 3D-stacked device or near individual DRAM banks. PNM provides high-bandwidth, low-energy and low-latency access to data while retaining a conventional programmable compute model. The architectures relevant to this project, including PAPI and LP-Spec (discussed below) as well as the proposed CAPIM, are all near-bank PNM designs.
+
+\subsection{LLM Inference}
+Modern LLMs are built from a stack of transformer decoder blocks. Each block comprises four principal kernels: QKV (query, key, and value) generation, multi-head attention, projection, and a feedforward network. Text is generated autoregressively: the model emits one token at a time, and each new token is conditioned on the entire sequence produced so far. To avoid recomputing the attention keys and values for the whole sequence at every iteration, the K and V matrices are cached once produced and reused across all subsequent iterations, a mechanism known as the KV-cache~\cite{he2025papi}.
+
+Inference proceeds in two stages. In the \emph{prefill} stage, the model processes all tokens of the input prompt simultaneously to produce the first output token; this is a highly parallel, compute-bound operation. In the \emph{decoding} stage, the model runs many sequential iterations, each taking the previously generated token as input to produce the next one, so generating $K$ output tokens requires $K$ dependent iterations. The decoding stage dominates end-to-end latency: for the GPT-3 175B model with input and output lengths of 32, serial decoding accounts for roughly 96\% of the total execution time~\cite{he2025papi}. This makes decoding the primary target for optimization. The two stages are illustrated in Figure~\ref{fig:llm_inference}.
+
+Because decoding is inherently sequential, producing only a single token per iteration, it is the natural target for efficiency improvements. Two parallelism techniques are commonly employed to accelerate it. The first is \emph{batching}, in which several independent user requests are grouped and processed together in one pass; the number of sequences handled simultaneously is termed the \emph{batch size}. Because the model weights loaded for one iteration are shared across every request in the batch, batching amortizes the cost of decoding over many tokens at once. The second is \emph{speculative decoding}, in which several candidate tokens are proposed and verified together within a single decoding iteration instead of one at a time (discussed in detail in Section~\ref{subsec:sd}). Both techniques raise the number of tokens processed per decoding iteration, and thereby improve efficiency.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{Figures/papi_figure1_llm_inference.png}
+\caption{LLM Inference: Prefill and Decoding Stages (reproduced from~\cite{he2025papi}).}
+\label{fig:llm_inference}
+\end{figure}
+
+\subsection{PAPI: PIM-based LLM Inference Architecture}\label{subsec:papi}
+A central insight for accelerating decoding on PIM-based architectures is that whether a given decoding kernel is compute-bound or memory-bound is not a fixed property, but depends on how much parallelism is available. This distinction is only actionable on a heterogeneous platform that pairs a conventional processor with PIM, where each kernel can be steered to the resource that suits it; a system built around a single compute unit, such as a GPU alone, cannot exploit it. The parallelism in question has two sources: the batch size, which sets the number of requests processed together, and the speculative decoding length, which sets the number of candidate tokens evaluated per decoding iteration. A kernel's arithmetic intensity, defined as the number of floating-point operations it performs per byte of data accessed from memory, grows with the product of these two quantities, so the same kernel can sit on either side of the roofline depending on the operating point~\cite{he2025papi}.
+
+This yields a concrete characterization of the decoding kernels. The fully-connected kernels (QKV generation, projection, and the feedforward network) are compute-bound when the available parallelism, and hence their arithmetic intensity, is large, and memory-bound otherwise. The attention kernel, by contrast, is always memory-bound, regardless of the available parallelism. It is therefore the fully-connected kernels alone whose classification shifts with the operating point~\cite{he2025papi}.
+
+Parallel Decoding with PIM (PAPI) is built directly on this characterization. It classifies each kernel at runtime from the batch size and speculative decoding length, dispatching compute-bound kernels to a conventional processing unit (GPU, NPU, or TPU) and memory-bound kernels to PIM modules, so that each kernel runs on the hardware best suited to it. PAPI is, however, a server-class architecture rather than a mobile one: driving the fully-connected kernels into the compute-bound regime depends on batching many concurrent user requests, an assumption that does not hold for on-device inference, where requests arrive one at a time. Carrying this compute-versus-memory-bound scheduling insight into the mobile setting is the subject of the architectures discussed below~\cite{he2025papi}.
+
+\subsection{Speculative Decoding (SD) Techniques}\label{subsec:sd}
+SD was developed to mitigate the inefficiencies of LLM inference. Because autoregressive decoding is inherently serial (producing one token at a time), improving performance required introducing more parallelism.
+
+Traditional SD (speculative sampling) achieved this by using a smaller, separate draft model to quickly propose a sequence of tokens, which the larger target model then verifies in parallel~\cite{leviathan2023speculative}. A defining property of SD is that it is lossless: the verification pass accepts or rejects each proposed token so that the generated text follows the target model's exact output distribution, and this guarantee holds for any draft, regardless of its quality~\cite{leviathan2023speculative}. The draft therefore governs only how many tokens are accepted per iteration, and hence the achieved speedup, never the correctness of the output. A direct consequence, which the pruning mechanism proposed in this work relies upon, is that discarding a draft token, even one that would eventually have been accepted, can only cost speed; it can never alter the generated text.
+
+Next-generation SD techniques introduced tree-based generation, verifying multiple candidates simultaneously. One of those techniques is MEDUSA. MEDUSA attaches multiple extra decoding heads directly to the final layer of the model. These heads allow the model to predict the next token, the token after that, and so on, all from a single hidden state, eliminating the need for a separate draft model~\cite{cai2024medusa}. The predictions of these heads are assembled into a static candidate tree, whose structure is fixed in advance and processed in parallel using tree-based attention. The MEDUSA workflow is shown in Figure~\ref{fig:medusa}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{Figures/fig2_medusa.png}
+\caption{MEDUSA Speculative Decoding Workflow (reproduced from~\cite{cai2024medusa}).}
+\label{fig:medusa}
+\end{figure}
+
+Another tree-based technique is EAGLE. Unlike MEDUSA, which predicts tokens independently, EAGLE shifts the drafting process to the feature level and performs it autoregressively. It observes that a more accurate prediction can be achieved by feeding the previous drafting step's feature back into the draft process~\cite{li2024eagle}. The EAGLE feature-based drafting process is depicted in Figure~\ref{fig:eagle}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{Figures/fig3_eagle.png}
+\caption{EAGLE Speculative Decoding Workflow (reproduced from~\cite{li2024eagle}).}
+\label{fig:eagle}
+\end{figure}
+
+EAGLE-2 extended EAGLE by observing that draft-token acceptance rates are strongly context-dependent: a static tree wastes computation on low-probability branches in uncertain contexts, yet fails to pursue deeper branches in predictable ones. Its key enabling observation is that the EAGLE draft model is well-calibrated, meaning its confidence scores, the draft model's own output probabilities for each proposed token, closely approximate the true acceptance rates. For example, draft tokens with a confidence score below 0.05 are accepted only about 4\% of the time, whereas those above 0.95 are accepted roughly 98\% of the time~\cite{li2024eagle2}. EAGLE-2 does not vary the size of the draft tree; the total draft-token budget and tree depth are fixed. What is dynamic is the selection of nodes filling that budget: at each expansion step the tree is populated by expanding and reranking candidates according to their cumulative confidence, the product of the draft probabilities along the path from the root to a node. In this way EAGLE-2 concentrates a fixed speculative decoding length (the token-level parallelism of Section~\ref{subsec:papi}) on the branches most likely to be accepted, shaping the tree to the live context rather than to a predetermined structure. An illustration of such a confidence-aware tree is shown in Figure~\ref{fig:eagle2}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.55\textwidth]{Figures/fig4_eagle2_tree.png}
+\caption{EAGLE-2 Confidence-Aware Tree Example (reproduced from~\cite{li2024eagle2}).}
+\label{fig:eagle2}
+\end{figure}
+
+\subsection{LP-Spec: PIM-based LLM Inference Architecture for Mobile Devices}\label{subsec:lpspec}
+LP-Spec is one of the state-of-the-art PIM-based architectures for on-device LLM inference. Unlike PAPI, which targets the server regime and depends on batching, LP-Spec addresses the mobile setting, where requests arrive one at a time and SD is the only remaining source of parallelism. It is implemented on an LPDDR5-PIM substrate that provides near-bank compute (409.6 GOPS at INT8 with 51.2 TB/s of internal bandwidth) alongside the standard 51.2 GB/s external LPDDR5 bus. On top of MEDUSA-style self-drafting, LP-Spec contributes two mechanisms: a Draft Token Pruner that trims the candidate tree before verification, and a scheduler that divides verification between the PIM units and a mobile NPU to maximize speed. The overall architecture and its Draft Token Pruner are shown in Figure~\ref{fig:lpspec}~\cite{he2025lpspec}.
+
+In MEDUSA-style self-drafting, several additional decode heads each emit their top-k tokens, which are merged into a candidate token tree by sharing common prefixes. Verifying this entire tree in parallel is energy-intensive, so the Draft Token Pruner reduces it beforehand. For each decode head and candidate position, it maintains an acceptance-accuracy statistic estimated from previous verification results; a greedy expander then builds a smaller tree by repeatedly adding the node with the highest accuracy, while a hardware estimator keeps the tree within a performance and energy budget defined by its expected acceptance length. These accuracy statistics are refreshed after every decoding iteration from the latest verification outcomes, so the pruned tree is optimized at run-time from accumulated historical statistics~\cite{he2025lpspec}.
+
+To execute verification, LP-Spec partitions the workload between the NPU and the PIM units using column-wise tensor parallelism, with the model weights and KV-cache distributed across the PIM and DRAM ranks. Both the fully-connected and the attention layers are split across the two units in this manner. A dynamic allocation unit (DAU) recomputes the partition ratio for each decoding iteration from the current speculation length, continuously adjusting how much of the verification is mapped to the NPU versus the PIM rather than committing each layer wholesale to a single device~\cite{he2025lpspec}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{Figures/fig6_lpspec.png}
+\caption{LP-Spec Architecture and Draft Token Pruner (reproduced from~\cite{he2025lpspec}).}
+\label{fig:lpspec}
+\end{figure}
+
+
+% ---------- Chapter Three ----------
+\newpage
+\section{Problem Statement}
+
+\subsection{Motivation}
+LLMs have achieved tremendous success across a variety of domains, and there is growing demand to run them directly on mobile and edge devices rather than in the cloud. On-device execution keeps user data local, avoids the network delay and jitter incurred by cloud round-trips, and preserves service availability without depending on a connection. However, deploying LLMs at the edge remains fundamentally constrained: a model must stream its full set of weights from memory for every token it generates, and edge platforms offer only a fraction of the memory bandwidth and energy budget available in the data centre~\cite{chen2026edge}.
+
+These constraints make efficient on-device inference an acute and increasingly studied problem. The first of them is energy. A mobile device draws from a fixed battery that must simultaneously serve the display, connectivity, and the everyday applications for which the device is primarily used, and opportunities to recharge are infrequent; inference therefore competes for an energy budget it does not own. That budget is exhausted quickly: under continuous inference with a 4-bit quantized 3B model, a smartphone's battery is estimated to be depleted after roughly 490--590 prompts~\cite{laskaridis2024melting}. Crucially, that energy is not spent where one might expect. In a processor-centric system, the weights are stored in memory and must be brought to the compute units before they can be used, and it is this movement, rather than the arithmetic performed once the data arrives, that dominates. When large commercial neural-network models are executed on modern edge machine learning accelerators, more than 90\% of the entire system energy is consumed by memory rather than by computation~\cite{mutlu2025primer}. For this class of workload, energy efficiency, rather than peak compute, is therefore the primary objective, and reducing data movement is the most direct means of improving it. This is precisely what PIM offers: by placing compute units next to the DRAM banks, weights are processed where they reside instead of being moved across an external bus.
+
+The second constraint is speed. An LLM generates its output sequentially, one token at a time, and in a processor-centric system each of these tokens requires the model's full set of weights to be moved across the off-chip interface. Commodity edge hardware provides only tens of GB/s for this transfer, far below that of server accelerators~\cite{chen2025elib}. In the data centre, this cost is amortized by batching: a single fetch of the weights serves many sequences at once. On-device inference, however, serves a single user stream and is therefore restricted to a batch size of one. This leaves SD as the primary source of parallelism, which attacks decoding latency by drafting several candidate tokens and verifying them in parallel.
+
+Research on efficient mobile LLM inference should therefore prioritize PIM-based architectures that specifically exploit SD, since the two techniques address the two constraints in a complementary manner.
+
+\subsection{Problem Definition}
+LP-Spec, one of the current state-of-the-art mobile PIM architectures for LLM inference, adopts MEDUSA speculative decoding. To bound the energy cost of speculation, it prunes the draft tree as the tree is built, keeping the branches most likely to be accepted. A hardware estimator caps how many branches survive, sizing the tree to an energy and performance budget, so a scarcer budget yields a smaller tree. It selects the branches to keep from per-(head, position) acceptance accuracies accumulated over previous decoding iterations -- a property of the draft heads and their history~\cite{he2025lpspec}. More recent SD methods outperform MEDUSA: in an independent evaluation of drafting techniques, EAGLE achieves the highest speedup across the settings considered~\cite{xia2024survey}, and its successor EAGLE-2 is faster still~\cite{li2024eagle2}, shaping its draft tree from per-token confidence scores computed for the current context. It uses these scores to decide which branches to expand, but not when to stop expanding. The draft tree therefore grows to a fixed size, the same whether or not the model is confident in the context. No mobile PIM architecture has yet adopted this family of methods. Because EAGLE-2's scores are tied to the context being generated, they might serve as a more accurate pruning criterion than LP-Spec's retrospective one, pruning fewer tokens that would have been accepted and more that would have been rejected.
+
+Pruning is not the only run-time decision such an architecture makes. It must also route the verification workload between the PIM and the NPU; drafting, a single parallel pass under MEDUSA, is light enough to set aside here. LP-Spec's dynamic allocation unit (DAU) partitions each layer column-wise between the NPU and the PIM, so the two devices verify concurrently. It reads the ratio of that split from an allocation table indexed by the draft tree's size, choosing the value that synchronizes the two units' execution times~\cite{he2025lpspec}. The DAU's objective is therefore latency; energy was weighed when the tree was sized, but not when the work is placed. Since the NPU always carries work, a share of the weights crosses the off-chip interface on every pass. That crossing is where most of the pass's energy goes, because moving a weight off-chip costs several times more energy than accessing it in memory. On a low battery, the slower in-memory placement the DAU never selects may be the better one to run -- a trade-off a latency objective cannot make.
+
+EAGLE-2's confidence scores could inform both of these decisions, though only the first directly. As a pruning criterion, the scores supply the stopping rule the fixed-size tree lacks: a branch stops expanding when its score falls below a threshold, so the tree stops growing where the model's confidence runs out. Its size then follows the context -- a confident context supports a large tree, an uncertain one a small tree. LP-Spec prunes to the same end, sparing the energy of verifying tokens unlikely to be accepted; a confidence gate might achieve that more naturally, since the scores that size the tree are computed during the drafting itself. The dynamic tree size could in turn decide placement. A small tree carries little verification work and may be better kept in memory, while a large one may justify the off-chip crossing for the NPU's speed.
+
+This leads us to the following research questions:
+\begin{enumerate}
+    \item Can a PIM-based LLM inference architecture for mobile devices natively adopt EAGLE-family speculative decoding, and outperform existing state-of-the-art architecture?
+    \item Can EAGLE-2's per-token confidence scores serve as a live, context-aware criterion for pruning the draft tree?
+    \item Can the size of the resulting draft tree route verification between the PIM and the NPU, trading energy against latency according to the device's battery and thermal state?
+\end{enumerate}
+
+\subsection{Objectives}
+The primary objective of this project is to propose and simulate a novel confidence-aware PIM-based architecture for LLM inference on mobile devices. This will be achieved through the following specific objectives:
+\begin{itemize}
+    \item \textbf{Characterize EAGLE-2's draft-tree behavior:} Study how EAGLE-2 constructs and scores its draft trees during decoding. Identify a confidence-based pruning criterion and threshold that a mobile LLM inference system can act on, saving energy by reducing verification of tokens unlikely to be accepted.
+    \item \textbf{Develop a dynamic routing policy:} Formulate a PIM-NPU scheduling policy that routes verification of the pruned candidate tree between PIM and NPU according to its size.
+    \item \textbf{Design the CAPIM control architecture:} Develop the control logic that runs EAGLE-2 inference under confidence-based pruning and the routing policy above. Make both configurable at runtime, so the threshold can shift to a low-power mode under battery or thermal constraints.
+    \item \textbf{Evaluate via simulation:} Build a simulation environment for CAPIM and the baseline architectures, sharing a common cost model so comparisons are fair, and use it to quantify latency and energy-efficiency improvements over the state of the art.
+\end{itemize}
+
+
+% ---------- Chapter Four ----------
+\newpage
+\section{Methodology}
+
+\subsection{Research approach}
+\label{sec:approach}
+The aim of this project is to establish whether the architecture set out by the research questions is worthwhile, and to do so without fabricating hardware. This requires a method that can predict the latency and energy of a design from its structure alone. It must also hold CAPIM, the LP-Spec baseline, and a plain autoregressive lower bound to the same measurement, so that any difference between them reflects the designs and not how they were assessed. The approach adopted is trace-driven analytical simulation, carried out in three stages. First, EAGLE-2's drafting behaviour is characterized and a pruning criterion is drawn from it. Next, that criterion and the baseline's own pruner are applied during real decoding, to record how each architecture behaves once pruned. Finally, the recorded behaviour is priced on a shared analytical cost model, over which the remaining hardware choices are explored.
+
+Recording the model's behaviour once and simulating over the recording, rather than running the model inside every experiment, is what keeps the design-space exploration affordable. Model inference requires a GPU and dominates the cost of a run, whereas the analytical simulation is inexpensive and runs on a CPU. The hardware design space is large -- a routing threshold, several placement choices, and a range of operating points -- and re-running the model at each configuration would be impractical under limited GPU access. Recording a bounded family of decoding behaviours once lets every configuration be evaluated on a CPU, so the costly measurement is paid for a fixed number of times and the exploration that follows is cheap.
+
+The first stage collects and analyses EAGLE-2's draft trees, in search of a confidence-based pruning criterion that an inference architecture can act on. It is therefore specific to CAPIM, and has no counterpart in the baselines. EAGLE-2 supplies part of the ground already. It treats a token's confidence score as an estimate of how likely that token is to be accepted, and reports the correspondence between the two, measured token by token~\cite{li2024eagle2}. It also holds that a token's own score says little in isolation, since a token can be accepted only if every token before it on its branch is accepted as well, and it therefore scores a node by the confidence accumulated along the path that reaches it. That accumulated score, however, is only ever used to rank. The highest-scoring nodes are the ones expanded, and the highest-scoring are the ones sent for verification, in numbers fixed in advance. Ranking asks only that scores order branches correctly; it never requires knowing what a score means. A gate that stops a branch does require it, since it must judge, with no other branch to compare against, whether that branch's chance of acceptance has become too small to be worth verifying at all. Nothing in the published work establishes that reading, as the correspondence EAGLE-2 measures is per-token, and the accumulated score is inferred from it rather than checked against the acceptance that branches actually receive. The premise this project sets out to test is that the accumulated score, measured against acceptance directly, is calibrated well enough to serve as the basis for such a threshold. Both quantities are therefore logged. Instrumented EAGLE-2 inference is run over both datasets, recording each drafted token's confidence score, its position in the draft tree, and the target model's eventual decision to accept or reject it. The resulting traces expose how confidence relates to acceptance, both per token and accumulated along a branch, and it is from that relationship that the criterion is drawn. The characterization method is described in Section~\ref{sec:characterization}.
+
+The second stage records how each architecture decodes once its pruning is in effect, and here CAPIM and the baseline are treated alike. CAPIM's criterion is applied inside the decoding loop, so that a branch whose confidence runs out is stopped as the tree is built. Sweeping the confidence threshold yields not one trace but a family of them, each capturing how the model decodes at a given degree of pruning. The LP-Spec baseline is recorded the same way, with MEDUSA in place of EAGLE-2 and its retrospective pruner in place of the confidence gate. That pruner keeps branches by acceptance statistics accumulated over previous decoding iterations rather than by a live score, and it too is swept, over the number of candidate tokens it retains for verification. Because both prunings happen during inference, the shortened trees these traces hold are the ones each model genuinely produces, not an approximation reconstructed afterwards from an unpruned recording.
+
+The third stage turns those traces into latency and energy figures. A single analytical cost model prices the individual layers of a transformer, and each architecture -- autoregressive decoding, LP-Spec, and CAPIM -- is expressed as a thin driver that emits its layers and composes them according to its own execution model. Because the three share one cost model, the fairness established when the traces were collected is carried through to the hardware evaluation.
+
+The units the cost model represents, an LPDDR5-PIM and a mobile NPU, are the same as LP-Spec's, parameterized from the bandwidth and throughput figures in its Table~II. Reusing them is deliberate, since the contribution of this work is the confidence-driven control rather than the units it runs on, and a shared platform makes the comparison turn on that control alone. Latency comes from a per-layer roofline over those parameters, and energy from published figures for the same technologies rather than from a simulator. This mirrors LP-Spec, which likewise obtains its energy from prior works and models performance analytically~\cite{he2025lpspec}; and it is in any case the only option, since no public simulator accurately models commercial LPDDR-PIM, existing PIM simulators being limited to generic HBM or DDR memory~\cite{cha2026lp5x}. The cost model is described in Section~\ref{sec:costmodel}.
+
+The quantities that define CAPIM are treated as open axes to be explored, rather than fixed in advance, so that the architecture and its dataflow are chosen on evidence. The first stage settles the form of the pruning criterion, but not the threshold at which it stops a branch. That threshold, the routing threshold, and the placement of each phase of drafting and verification are all settled in the third stage, by weighing each choice's effect on energy and latency in the cost model. The reasoning behind each decision, and the criterion that resolves it, are set out in Section~\ref{sec:dse}; the values they produce, together with the evaluation against the two baselines, appear in Chapter~5.
+
+
+% ---------- Chapter Five ----------
+\newpage
+\section{Results}
+
+\subsection{EAGLE-2 draft tree behaviour under a confidence gate}
+\label{sec:pruning}
+
+CAPIM's pruner rests on two propositions about the EAGLE-2 draft tree, and neither is safe to assume. The first is that the tree contains nodes worth removing. The second is that the confidence score identifies them. Whether a node is worth its place in the tree is in the end a question about hardware, since it is the hardware that pays for drafting and verifying it. But it is also a question about the drafting algorithm and the workload, and that half of it can be answered first. It is answered here, on the collected traces, before any hardware is committed to a pruner.
+
+The measure used throughout is what a single decoding iteration returns. Autoregressive decoding returns exactly one token per iteration. Speculative decoding returns more, because the draft tree is built ahead of time and the target checks all of it in one verification pass, so every drafted token it accepts is a token the target did not have to generate itself. An iteration also returns one token from the target directly, so the count begins at one, exactly where autoregressive decoding sits. Tokens per iteration is the speedup a draft tree buys, and raising it is what every speculative decoding method sets out to do. How long an iteration takes, and what it costs to run, are different questions that belong to the architecture rather than to the tree; they are settled in Section~\ref{sec:dse}.
+
+EAGLE-2 grows the same draft tree at every iteration. By default it expands 60 tokens to a depth of six, one of which is the root that the target has already committed, so 59 nodes are submitted in each verification pass~\cite{li2024eagle2}. The size and the depth are hyperparameters, set once before the run and never revisited during it, and they are set to maximise the accepted length. Run ungated using 100 prompts from each dataset, that tree produces 159{,}064 draft nodes across 2{,}696 decoding iterations on Alpaca, every one of them submitted to the target, of which 9{,}133 are accepted. GSM8K gives 180{,}717 nodes across 3{,}063 iterations, of which 11{,}421 are accepted. Fewer than one node in sixteen survives verification: 5.7\% on Alpaca and 6.3\% on GSM8K.
+
+Those figures can be easily misread, and the limit on what they can mean should be stated before any weight is placed on them. The tokens accepted in an iteration are consecutive tokens of a single output sequence, so they can only ever form one path down from the root of the tree; a subtree cannot be accepted. A tree six levels deep therefore contributes at most six accepted nodes however wide it is, and across 59 nodes the acceptance density cannot exceed 10.2\% however accurate the drafting is. Rejecting 94.3\% of Alpaca's nodes sounds like a failure of drafting, but the shape of the tree alone forces 89.8\% of them to be rejected, and only the remaining 4.5\% can be attributed to drafting at all. Rejection is mostly what a tree is, and an argument resting on the rejection rate alone would be an argument against tree-structured drafting itself.
+
+The defensible objection is to the marginal node rather than the average one, and it is visible in how the tree's return changes as the tree grows. Figure~\ref{fig:saturation} plots the accepted length against the draft tree size, obtained by sweeping the confidence threshold σ\textsubscript{th} across the ungated traces. The curve rises steeply and then flattens. Two accepted tokens are reached by the time five nodes have been drafted and verified, and the remaining 54 nodes of the tree buy less than one and a half more. Measured as a rate, the first three nodes on Alpaca return 0.59 accepted tokens each, while the 56 nodes after them return 0.033 each -- a collapse of 18.0x in what a verified node is worth. On GSM8K the same two rates are 0.56 and 0.033, a collapse of 17.1x.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{Figures/fig7_saturation.png}
+\caption{Accepted tokens per decoding iteration against draft tree size, obtained by sweeping the confidence threshold over the ungated EAGLE-2 traces.}
+\label{fig:saturation}
+\end{figure}
+
+A threshold on the confidence score turns that collapse into an exchange rate. Gating at σ\textsubscript{th} = −1.5 leaves 7.0\% of the draft nodes on Alpaca to be verified, and those nodes still return 65.4\% of the tokens the full tree returns. Gating harder, at σ\textsubscript{th} = −1.0, leaves 4.5\% of the nodes and returns 58.0\% of the tokens: 22x fewer nodes verified, for 1.7x fewer tokens per iteration. GSM8K behaves the same way, retaining 68.6\% and 61.4\% of its tokens for 8.5\% and 5.8\% of its nodes. A tree of 59 nodes spends the great majority of its verification on the flat part of the curve, and a threshold on a score the drafting already computes is enough to keep it off. Where that threshold should sit is not a question the draft tree can answer, and it is settled against energy and latency in Section~\ref{sec:dse}.
+
+
+\subsection{Validation of the shared cost model}
+\label{sec:validation}
+
+LP-Spec's simulation framework is not published, and a request to its authors for it went unanswered, so the baseline could not be obtained and had to be reconstructed from the published description onto the shared cost model of Section~\ref{sec:costmodel}. That cost model produces every number in this chapter, for CAPIM and for both baselines alike, so establishing that it is sound underpins everything that follows. Reconstructing the baseline rather than obtaining it also carries a benefit: it places LP-Spec and CAPIM on one cost model, which is what makes the comparison in Section~\ref{sec:eval} fair. The soundness check can only be external, and the one external reference available is what LP-Spec reports for itself: 73.4 token/s and 32.6 token/J on a 7B model~\cite{he2025lpspec}.
+
+One quantity in the reconstruction cannot be recovered from the paper. LP-Spec's speculation length (L\textsubscript{spec}) is not a configuration value that can be set: it is produced at run-time by the Draft Token Pruner, which grows the tree node by node and stops on a combined performance and energy objective~\cite{he2025lpspec}. The paper does not specify that objective in enough detail to reproduce, so the sequence of tree sizes it would have produced cannot be regenerated. The reconstruction instead takes a fixed tree size as an input, standing for the run-average speculation length, and sweeps it over the grid of Section~\ref{sec:expdesign}.
+
+Figure~\ref{fig:validation} shows that sweep against the two figures LP-Spec reports for itself, with the cost model driven by Alpaca traces to match the dataset LP-Spec reports those figures on. At their closest the swept sizes reproduce LP-Spec's reported energy efficiency to 0.98x and its throughput to 1.02x. An exact match was neither achieved nor expected: with the estimator unavailable, the reconstruction cannot recover LP-Spec's run-average speculation length and instead sweeps a fixed tree size, which yields a range rather than a single operating point. What the check asks is whether that range lands close to the reported system, and it does, to within a few percent on both of the axes LP-Spec reports.
+
+On that basis the cost model is accepted as the instrument for the remainder of the chapter. LP-Spec accordingly enters the comparison of Section~\ref{sec:eval} not as a single quoted pair of numbers but as a modelled system swept across tree size, and CAPIM is held against the strongest point of that sweep -- a point that matches LP-Spec's published energy efficiency and exceeds its published throughput.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{Figures/fig9_validation.png}
+\caption{The reconstructed LP-Spec baseline on Alpaca, swept across draft tree size, against the throughput and energy efficiency LP-Spec reports for itself~\cite{he2025lpspec}. Marker colour encodes the fixed speculation length; the black cross is LP-Spec's own published operating point.}
+\label{fig:validation}
+\end{figure}
+
+
+\subsection{Exploring the hardware design space}
+\label{sec:dse}
+
+Two thresholds govern CAPIM, and neither has been given a value. Section~\ref{sec:pruning} established what a confidence gate does to the draft tree and then set the question of where that gate should sit aside, on the grounds that the draft tree cannot answer it. The routing threshold has not been exercised at all. Both are settled here, on the two axes a battery-powered device is judged on, by sweeping them jointly through the cost model that Section~\ref{sec:validation} accepted.
+
+The two thresholds are not the same kind of quantity, and the difference runs through everything below. σ\textsubscript{th} changes what is computed. It decides how many of the 59 drafted nodes reach the verification pass, and its effect on the tree was measured in Section~\ref{sec:pruning} without reference to any hardware. μ\textsubscript{th} changes where that work is computed. It compares the size of the surviving tree against a threshold and selects the execution model for the verification pass: PIM-resident below the threshold **I think we should be more clear about this - it's not that the whole pass done on PIM, we do what we can on PIM, non-linear ops does go to NPU, we should frame it like "offload whatever you can to PIM"**, column-split across the NPU and PIM above it (Section~\ref{sec:routing}). One threshold removes work and the other moves it.
+
+What the sweep is being asked for should be stated plainly, because it is not what a design space exploration is usually asked for. A single objective would rank the operating points and hand back a winner, and the winner would be an artefact of the objective. **I don't like the tone of this opening - let's change it to something that is not saying that this is unusual, just what we do - not searching for a winner but exploring the tradeoff and the possible operation modes**. On a device running from a battery the preferred point is not a fixed property of the architecture. It depends on the charge **not sure about charge, maybe just change to battery?** remaining, on the thermal headroom, and on whether a user is waiting for the output. An architecture that fixes that choice at design time has answered a question the device is better placed to answer at run-time. The sweep is therefore asked what region of the energy-latency plane is reachable, and what each threshold does inside it.
+
+Table~\ref{tab:surface} gives the sweep in full, and Figure~\ref{fig:surface_alpaca} draws the Alpaca half of it. Each gate traces its own curve through the plane, and μ\textsubscript{th} is travel along that curve, from the fast and thirsty **thirsty? can we use another word?** corner at μ\textsubscript{th} = 1 to the slow and lean **what is lean about it?** one at μ\textsubscript{th} = 64. The curves are long enough to be worth having. Holding σ\textsubscript{th} at −1.0 and moving μ\textsubscript{th} alone carries the design from 152.9 token/s at 46.1 token/J to 138.8 token/s at 63.8 token/J, which buys 38\% more energy efficiency for 9\% less throughput. The same movement is present at every gate. This is the exchange the architecture offers, and μ\textsubscript{th} is the control that walks along it.
+
+% Owes the per-iteration energy breakdown figure (report.py:breakdown() has the data;
+% plots.py has no plot for it). Every number here recomputed 2026-07-17 by instrumenting
+% the drivers -- NOT from report_handover.md, whose "~36% of E_iter" is wrong for L=4
+% (that is L=8's 39.8%) and whose "15% of FC columns" conflates the column share with
+% the 0.55/3.59 pJ/bit energy ratio. Measured column share is 8.0% mean.
+That exchange does not come from the size of the tree, which is why μ\textsubscript{th} moves energy at all. The weights are streamed once per decoding iteration whatever the tree size (Section~\ref{sec:costmodel}), so verifying fewer nodes saves less than it appears to. What μ\textsubscript{th} changes is where the weights are read. Below the threshold the verification pass is PIM-resident and every weight is read in-bank; above it the pass is column-split, and the NPU's share of each weight matrix crosses the external bus at roughly six and a half times the energy per bit. Measured over the Alpaca run at σ\textsubscript{th} = −1.0, the low-power setting sends none of its decode energy over that bus, against 32.8\% at the standard setting. The reconstructed LP-Spec cannot reach either figure. Its Data Allocation Unit tunes how the split is proportioned, but the split itself stands: the NPU's share of the columns averages 8.0\% and never falls to zero, and those columns carry 30.6\% of decode energy at the baseline's strongest tree size. Residency, not node count, is where the energy is. **this paragraph is still not clear. I do not want to do the energy breakdown in our results - we did it in the designing phase and our results really don't focus on that. what do we say in this paragraph? saying that the exchange does not come from the size of the tree is really confusing - the threshold is looking on it alone. we need to be very precise and careful here**
+
+The exchange is not equally available at every gate, because the two thresholds are not independent **this sentence is not clear enough - not clear what is gate and what is threshold**. A routing threshold set above the largest tree a gate ever produces can never fire, so every setting above that point selects the same machine and returns the same numbers. Table~\ref{tab:trees} gives the tree each gate **again - we should name precisly which threshold we are talking about** leaves standing, and its largest-tree column predicts where each row of Table~\ref{tab:surface} stops changing. On Alpaca the tightest gate **again - gate, not clear enough** never produces a tree larger than 6 nodes, and its μ\textsubscript{th} = 8, 12, 16 and 64 entries are consequently identical; at σ\textsubscript{th} = −1.0 the largest tree is 12 and the entries become identical from 16; at σ\textsubscript{th} = −2.5 the largest is 27 and the row is still moving at 64. The prediction holds in all ten cases across both datasets. The consequence is the useful part. A tighter gate produces smaller trees, and smaller trees leave μ\textsubscript{th} a shorter axis to travel, so the gate does not merely set where the exchange starts -- it sets how much of the exchange remains available at all. **what is useful about it?**
+
+A property of the PIM datapath rather than of the gate accounts for the size of the steps along each row. The near-bank ALUs are token-parallel and serve four draft tokens per weight pass, so a tree is rounded up to a whole number of passes before it is verified, and the latency of an iteration is flat within a pass and jumps at each boundary. The reconstructed baseline shows the effect cleanly: a tree of 2 and a tree of 4 both fit one pass and cost 14.03 ms and 14.21 ms per iteration, while a tree of 8 buys a second pass and costs 25.12 ms, 77\% more for twice the nodes. A gated tree averaging between two and four nodes therefore fits a single pass, which is what makes it efficient rather than merely small. The pass width is a latency quantisation and not a threshold, since splitting to the NPU only begins to pay at a tree of 45 nodes -- far above anything these gates produce. Both the pass width and the PIM throughput figure that places that crossover are stress-tested in Section~\ref{sec:sensitivity}. **I am starting to think that this ALU_N discussion does not belong here - maybe we can mention it in the methodology chapter?**
+
+Figure~\ref{fig:surface_gsm8k} draws the same sweep on GSM8K, and the surface has moved. It sits up and to the right of Alpaca's throughout. The fastest reachable point here is 160.2 token/s against Alpaca's 152.9, and the most efficient is 67.8 token/J against 64.4. GSM8K is simply the better speculation workload before any gate is applied, returning 4.73 tokens per iteration ungated against Alpaca's 4.39, and every point on its surface inherits that advantage. What the second dataset adds is not a larger gain but a comparison, and the comparison is what settles where the gate belongs. **not sure if comparison is the right word, and not sure what this "comparison" settles - maybe we just fold this paragraph into the next one and shorten it?**
+
+No single gate can be nominated as correct, and the two datasets show why. The fastest point on Alpaca belongs to σ\textsubscript{th} = −1.0, while on GSM8K it belongs to the tighter σ\textsubscript{th} = −0.5; the reachable boundary of the Alpaca surface is drawn from three gates and GSM8K's from two. The mechanism behind that is the one thing σ\textsubscript{th} cannot escape. It is an absolute threshold on a cumulative log-probability, so a workload whose confidence sits higher meets the same number as a gentler gate. At σ\textsubscript{th} = −1.0 the identical threshold leaves 3.39 nodes standing on GSM8K against 2.63 on Alpaca, and 1.90 accepted tokens against 1.55. Holding the tree size constant across a shift in confidence therefore means moving the gate, and moving it in a direction the mechanism predicts: the more confident the workload, the tighter the gate it can afford. Both datasets lean that way, GSM8K's boundary towards the tighter gate and Alpaca's towards the looser ones. Two workloads agreeing with a mechanism is not a calibration law, and no table of gates per workload is offered here. But it is enough to place the choice. σ\textsubscript{th} tracks a measurable property of the text being decoded, which is a property no design-time constant can know and a run-time control can. Section~\ref{sec:pruning} deferred the value of σ\textsubscript{th} to this section, and this is the answer: it has a range rather than a value, for the same reason μ\textsubscript{th} has one -- the right point depends on something only the running device can see.
+
+What the surface licenses is therefore a control rather than an optimum. Every setting of μ\textsubscript{th} from 1 to 8 is reachable and none is dominated on either dataset, so the routing threshold is a graded dial that saturates at the top rather than a switch with two positions, and the gate selects which exchange curve that dial runs along. Neither threshold is compiled into the design. Both are left where the choice belongs, with a device that knows its charge, its temperature, and whether anyone is waiting. **I think this - we have not reached a value but a range so do whatever you want with it is too much - we did not reach a value, but we did see that sigma_th=-2.5 is not good no matter what. the range we offer is bounded, one that allow us at the moment to suggest sigma=-1 as a good enough value to run mu_th along it, and leave any more sigma_th calibration to following works or the engineers that actually implement this**
+
+% OPEN, for 5.5 not for here: which sigma_th to ILLUSTRATE with. This section now
+% argues sigma has a range, not a value, and declines a per-workload table -- so 5.5
+% must present its gate as an illustration or contradict 5.4. The non-EDP reason
+% available (verified 2026-07-17): sigma=-1.0 is frontier-resident on BOTH datasets
+% (7/11 alpaca, 4/11 gsm8k), where sigma=-0.5 is 1/11 on alpaca and sigma=-1.5 is 0/11
+% on gsm8k -- i.e. -1.0 is the least workload-sensitive choice, which is an argument
+% for a robust illustration and NOT for an optimum. Consistent with this section.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4.5pt}
+\caption{The joint threshold sweep. Each cell gives throughput in token/s and energy efficiency in token/J for one (σ\textsubscript{th}, μ\textsubscript{th}) pair, over 100 prompts per dataset with the draft model PIM-resident. Reading down a column shows the gate removing work; reading across a row shows the routing threshold moving it. Repeated cells to the right of each row are not an error: a routing threshold above the largest tree the gate produces never fires, and selects the same machine (Table~\ref{tab:trees}).}
+\label{tab:surface}
+\begin{tabular}{lccccccc}
+\toprule
+ & \multicolumn{7}{c}{μ\textsubscript{th}} \\
+\cmidrule(lr){2-8}
+σ\textsubscript{th} & 1 & 2 & 4 & 8 & 12 & 16 & 64 \\
+\midrule
+\multicolumn{8}{l}{\emph{Alpaca}} \\
+−0.5 & 150.9 / 43.8 & 144.6 / 51.6 & 141.7 / 56.5 & 138.4 / 60.6 & 138.4 / 60.6 & 138.4 / 60.6 & 138.4 / 60.6 \\
+−1.0 & 152.9 / 46.1 & 149.5 / 50.2 & 146.2 / 55.3 & 139.1 / 63.5 & 138.9 / 63.8 & 138.8 / 63.8 & 138.8 / 63.8 \\
+−1.5 & 142.0 / 45.7 & 140.8 / 47.2 & 138.7 / 50.4 & 128.6 / 61.8 & 126.4 / 64.3 & 126.2 / 64.4 & 126.2 / 64.4 \\
+−2.0 & 123.5 / 42.8 & 123.2 / 43.2 & 122.5 / 44.3 & 114.4 / 52.9 & 107.7 / 60.6 & 106.4 / 62.1 & 106.3 / 62.2 \\
+−2.5 & 103.1 / 38.3 & 103.1 / 38.4 & 102.9 / 38.6 & 99.8 / 41.7 & 91.6 / 49.6 & 86.1 / 55.8 & 84.2 / 58.0 \\
+\midrule
+\multicolumn{8}{l}{\emph{GSM8K}} \\
+−0.5 & 160.2 / 47.6 & 155.4 / 53.5 & 152.1 / 58.8 & 146.1 / 65.9 & 146.1 / 65.9 & 146.1 / 65.9 & 146.1 / 65.9 \\
+−1.0 & 155.4 / 48.7 & 153.5 / 51.0 & 150.5 / 55.3 & 140.1 / 67.5 & 139.8 / 67.8 & 139.8 / 67.8 & 139.8 / 67.8 \\
+−1.5 & 140.0 / 47.1 & 139.6 / 47.7 & 138.3 / 49.6 & 126.1 / 63.5 & 123.3 / 67.0 & 123.1 / 67.2 & 123.1 / 67.2 \\
+−2.0 & 120.0 / 43.0 & 120.0 / 43.1 & 119.6 / 43.6 & 112.2 / 51.3 & 104.1 / 60.7 & 102.3 / 63.0 & 101.9 / 63.4 \\
+−2.5 & 102.6 / 38.9 & 102.6 / 38.9 & 102.5 / 39.0 & 100.4 / 40.9 & 92.0 / 48.6 & 85.4 / 56.1 & 82.6 / 59.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\caption{The draft tree that survives each gate, in nodes, measured over the gated runs. The largest-tree column predicts where each row of Table~\ref{tab:surface} stops changing: the smallest routing threshold above it selects the same machine as every threshold above that. A tighter gate leaves a smaller tree, and a smaller tree leaves the routing threshold a shorter range to control.}
+\label{tab:trees}
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{3}{c}{Alpaca} & \multicolumn{3}{c}{GSM8K} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+σ\textsubscript{th} & median & mean & largest & median & mean & largest \\
+\midrule
+−0.5 & 1 & 1.59 & 6 & 2 & 2.18 & 6 \\
+−1.0 & 2 & 2.63 & 12 & 3 & 3.39 & 11 \\
+−1.5 & 4 & 4.05 & 14 & 5 & 5.02 & 15 \\
+−2.0 & 6 & 6.08 & 18 & 7 & 7.16 & 20 \\
+−2.5 & 9 & 9.11 & 27 & 10 & 10.32 & 29 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{Figures/fig10_surface_alpaca.png}
+\caption{The reachable region on Alpaca. Line colour encodes the confidence gate, which selects the exchange curve; dot fill encodes the routing threshold, which is travel along it, running from μ\textsubscript{th} = 1 at the lower right to μ\textsubscript{th} = 64 at the upper left. The dots pile up at the top of each curve where the routing threshold passes the largest tree the gate produces. Axis limits are identical to Figure~\ref{fig:surface_gsm8k}.}
+\label{fig:surface_alpaca}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{Figures/fig11_surface_gsm8k.png}
+\caption{The reachable region on GSM8K, drawn on the axis limits of Figure~\ref{fig:surface_alpaca}. The surface sits up and to the right of Alpaca's, and its boundary is drawn from two gates rather than three -- the fastest point here belongs to σ\textsubscript{th} = −0.5, where on Alpaca it belongs to σ\textsubscript{th} = −1.0.}
+\label{fig:surface_gsm8k}
+\end{figure}
+
+
+\subsection{Evaluation Metrics}
+To assess the efficacy of the proposed architecture, the following Key Performance Indicators (KPIs) will be measured and analysed:
+\begin{itemize}
+    \item \textbf{Energy Efficiency (Joules/Token):} The primary metric for mobile deployment. This will quantify the total energy consumed by the memory system, PIM computation, NPU computation and data transfer interfaces per generated token.
+    \item \textbf{End-to-End Latency (Speedup):} The time required to generate a complete response. This will measure the acceleration provided by EAGLE-2's SD compared to the baselines.
+    \item \textbf{Acceptance Rate:} An algorithmic metric that measures the proportion of draft tokens accepted by the target model. This will provide an indication of how much the live pruning mechanism affects overall accuracy.
+\end{itemize}
+
+\subsection{Evaluation Environment and Benchmarking}
+The proposed architecture will be benchmarked against two distinct baselines to isolate the source of improvements:
+\begin{itemize}
+    \item \textbf{Standard Autoregressive:} A conventional system running the target model without SD. This establishes the lower bound for latency.
+    \item \textbf{LP-Spec (MEDUSA):} The state-of-the-art mobile PIM architecture utilizing static tree-based SD. This comparison highlights the specific advantages of the proposed dynamic confidence-aware pruning and scheduling.
+\end{itemize}
+As mentioned above, all architectures will be validated through architectural simulation using the Samsung PIM Simulator~\cite{samsungpimsim}.
+
+\subsection{Evaluation Scenarios and Expected System Behaviour}
+We will evaluate the system under three distinct scenarios designed to reflect common and meaningful use cases for LLM inference on mobile devices:
+\begin{itemize}
+    \item \textbf{Conversational AI:} Using the GDPval dataset~\cite{gdpval}. These tasks typically exhibit low token predictability. We expect the system to trigger live pruning frequently and rely on PIM verification.
+    \item \textbf{Reasoning and Coding:} Using the GSM8K dataset~\cite{gsm8k}. These tasks often have higher confidence. We expect the system to favor deep trees and frequent NPU offloading.
+    \item \textbf{Low Power Mode:} We will simulate a low power mode by increasing the confidence threshold. This scenario tests the system's ability to trade off latency increases for maximum battery preservation by forcing more execution into the low-power PIM units.
+\end{itemize}
+
+\subsection{Anticipated Outcomes and Significance}
+The proposed architecture is expected to yield improvements over existing state-of-the-art mobile PIM architectures in terms of energy efficiency, latency and accuracy (SD acceptance rate). We aim for a 20--30\% reduction in total energy consumption compared to the LP-Spec baseline, a gain primarily derived from eliminating the data allocation overhead associated with weight swapping and preventing unnecessary NPU activation for failed speculation attempts. Regarding latency, we anticipate a 1.5x to 2x speedup over LP-Spec, alongside a 1.5x to 2x improvement in acceptance rate, driven by the higher intrinsic acceptance rate and speed of EAGLE-2.
+
+Beyond these performance metrics, the broader significance of this research lies in demonstrating that model confidence score can serve as a viable hardware control signal for SD-based LLM inference architectures. By proving that PIM-based architecture can leverage this signal for PIM-NPU scheduling, this work establishes a new paradigm for deploying LLM inference on battery-constrained devices.
+
+
+% ---------- Conclusion ----------
+\newpage
+\section{Conclusion}
+
+This proposal addressed the significant challenges of deploying LLM inference on energy-constrained mobile devices. It identified that existing PIM-based architectures, such as LP-Spec, remain inefficient due to their reliance on static tree-based SD, along with a tree pruning mechanism for saving energy. To resolve this, a novel confidence-aware PIM-based architecture was proposed, which integrates the state-of-the-art EAGLE-2 SD technique. By replacing reactive pruning with live, confidence-gated termination and implementing a dynamic PIM-NPU scheduling policy, the methodology aimed to align hardware energy consumption with real-time model uncertainty. The anticipated results highlighted a projected 20--30\% reduction in energy usage and a latency improvement over current baselines, thereby demonstrating that translating model confidence into hardware control signals offers a viable pathway for enabling efficient high-performance edge AI.
+
+% ---------- References ----------
+\newpage
+\addcontentsline{toc}{section}{References}
+\bibliographystyle{IEEEtran}
+\bibliography{references} 
+
+% ---------- Appendices ----------
+%use \appsec{…} and not \section{…} for each appendix. You can repeat \appsec{…} for B, C, etc., and it will always stay in sync.
+\newpage
+\appendix
+
+\newcommand{\appsec}[1]{%
+  \refstepcounter{section}
+  {\centering\normalfont\Large\bfseries Appendix \thesection: #1\par}
+  \addcontentsline{toc}{section}{Appendix \thesection: #1}
+  \vspace{1em}
+}
+
+\appsec{Workplan}
+
+\subsection{Gantt Diagram of Workplan}
+Table~\ref{table:gantt} presents a Gantt diagram of the tasks needed to complete this project.
+
+\begin{table}[H]
+\centering
+\caption{Gantt Diagram}
+\label{table:gantt}
+\renewcommand{\arraystretch}{1.4}
+\setlength{\tabcolsep}{4pt}
+\small
+\begin{tabular}{|l|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Task} & \textbf{Jan} & \textbf{Feb} & \textbf{Mar} & \textbf{Apr} & \textbf{May} & \textbf{June} & \textbf{Jul} & \textbf{Aug} \\
+\hline
+Literature Review & \cellcolor[HTML]{9BBB59} & \cellcolor[HTML]{9BBB59} & \cellcolor[HTML]{9BBB59} & & & & & \\
+\hline
+Baseline architecture study & & \cellcolor[HTML]{B6DDE8} & \cellcolor[HTML]{B6DDE8} & & & & & \\
+\hline
+EAGLE-2 behavior analysis & & & \cellcolor[HTML]{FBD4B4} & \cellcolor[HTML]{FBD4B4} & & & & \\
+\hline
+Architecture design & & & & \cellcolor[HTML]{E36C0A} & \cellcolor[HTML]{E36C0A} & & & \\
+\hline
+Architecture simulation & & & & & \cellcolor[HTML]{C2D69B} & \cellcolor[HTML]{C2D69B} & & \\
+\hline
+Results analysis and benchmarking & & & & & & \cellcolor[HTML]{D99594} & \cellcolor[HTML]{D99594} & \\
+\hline
+Writing report & & & & & \cellcolor{yellow} & \cellcolor{yellow} & \cellcolor{yellow} & \cellcolor{yellow} \\
+\hline
+Preparing video presentation & & & & & & & \cellcolor{yellow} & \cellcolor{yellow} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Risks and Mitigation Plan}
+Table~\ref{table:risks} describes risks associated with completing this project and a corresponding mitigation plan.
+
+\begin{table}[H]
+\centering
+\caption{Risks and Corresponding Mitigation Plan}
+\label{table:risks}
+\renewcommand{\arraystretch}{1.3}
+\small
+\begin{tabular}{|p{4.2cm}|c|c|p{5.5cm}|}
+\hline
+\textbf{Risk} & \textbf{Likelihood} & \textbf{Impact} & \textbf{Contingency plan} \\
+\hline
+EAGLE-2 confidence scores do not strongly correlate with acceptance rate under mobile constraints & Low & High & Perform early statistical analysis to characterize confidence-acceptance correlation. If correlation is weak, look for other dynamic tree-based speculative decoding techniques. \\
+\hline
+Overhead of confidence monitoring and live pruning outweighs energy savings & Medium & Medium & Model confidence logic as a lightweight comparator and evaluate its overhead explicitly. If overhead is excessive, try adding more logic to fine-tune it. \\
+\hline
+PIM-NPU scheduling policy is sensitive to threshold tuning & Low & Medium & Perform sensitivity analysis across a range of confidence thresholds and tree sizes. Define conservative default policies and evaluate multiple operating modes (performance-focused vs.\ energy-focused). \\
+\hline
+Selected LLM models are too computationally heavy for full simulation & High & Low & Conduct simulations using available lab resources or by employing smaller models. If this remains insufficient, validate overall trends through multiple scaled-down configurations to ensure that the results generalize. \\
+\hline
+Projected energy or latency gains are smaller than expected & Medium & Medium & Emphasize qualitative insights and architectural trends rather than absolute gains. Compare against multiple baselines to demonstrate consistent improvements and analyse scenarios where confidence-aware control is most beneficial. \\
+\hline
+\end{tabular}
+\end{table}
+
+
+\end{document}
