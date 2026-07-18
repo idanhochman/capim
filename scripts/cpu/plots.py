@@ -681,6 +681,73 @@ def fig_validation(outdir: Path) -> Path:
     return out
 
 
+def fig_headline(outdir: Path) -> Path:
+    """5.5 -- the two shipped operating points against both LP-Spec references and AR.
+
+    Five points, identified by a side legend -- no colorbar, no L-sweep curve, no
+    on-plot text, unlike fig_frontier/fig_validation.  CAPIM's two operation modes
+    (sigma_th=-1.0, the gate fig5_4's bound and dominance check settle on; mu_th=1
+    "Standard" / mu_th=64 "Low-power" -- see fig_frontier for why the sweep collapses
+    to just these two), LP-Spec's L=4 point (our own cost model's best-case
+    reconstruction -- the largest keep-count that still fits one N_ALU=4 pass),
+    LP-Spec's own published pair (Tab. III), and autoregressive decoding as the floor.
+
+    Alpaca only.  LP-Spec has no published GSM8K run, so a second panel would be
+    comparing CAPIM against a baseline that was never evaluated on that dataset --
+    the same reason fig_validation is Alpaca-only.
+    """
+    drive = load_drive()
+    cap = [r for r in drive if r["driver"] == "capim" and r["dataset"] == "alpaca"
+           and r["config"]["draft_device"] == "pim" and not _is_topm(r)
+           and r["collection_gate"] == -1.0]
+    standard = next(r for r in cap if r["config"]["mu_th"] == 1)
+    lowpower = next(r for r in cap if r["config"]["mu_th"] == 64)
+    lp_best = next(r for r in drive if r["driver"] == "lp_spec" and r["dataset"] == "alpaca"
+                   and r["config"]["L_spec"] == 4)
+    ar = next(r for r in drive if r["driver"] == "ar" and r["dataset"] == "alpaca")
+
+    fig, ax = plt.subplots(figsize=(7.0, 5.6))
+
+    ax.scatter(standard["token_per_s_mean"], standard["token_per_j_mean"], s=150,
+               marker="o", color=MODE_COLOR[1], edgecolor=SURFACE, linewidth=1.0, zorder=4)
+    ax.scatter(lowpower["token_per_s_mean"], lowpower["token_per_j_mean"], s=150,
+               marker="o", color=MODE_COLOR[64], edgecolor=SURFACE, linewidth=1.0, zorder=4)
+    ax.scatter(lp_best["token_per_s_mean"], lp_best["token_per_j_mean"], s=150,
+               marker="X", color=RED, edgecolor=SURFACE, linewidth=1.0, zorder=4)
+    ax.scatter([LP_SPEC_PUBLISHED[0]], [LP_SPEC_PUBLISHED[1]], s=150, marker="X",
+               color=INK, edgecolor=SURFACE, linewidth=1.0, zorder=4)
+    ax.scatter([ar["token_per_s_mean"]], [ar["token_per_j_mean"]], s=115, marker="^",
+               color=INK, edgecolor=SURFACE, linewidth=0.9, zorder=4)
+
+    ax.set_xlabel("Throughput (token/s)")
+    ax.set_ylabel("Energy efficiency (token/J)")
+    ax.set_xlim(left=0)
+    ax.set_ylim(0, max(standard["token_per_j_mean"], lowpower["token_per_j_mean"],
+                        lp_best["token_per_j_mean"], LP_SPEC_PUBLISHED[1]) * 1.15)
+    _despine(ax)
+
+    handles = [
+        Line2D([], [], color="none", marker="o", ms=10, markerfacecolor=MODE_COLOR[1],
+               markeredgecolor=SURFACE, label="CAPIM - Standard"),
+        Line2D([], [], color="none", marker="o", ms=10, markerfacecolor=MODE_COLOR[64],
+               markeredgecolor=SURFACE, label="CAPIM - Low-power"),
+        Line2D([], [], color="none", marker="X", ms=11, markerfacecolor=RED,
+               markeredgecolor=SURFACE, label="LP-Spec (simulated)"),
+        Line2D([], [], color="none", marker="X", ms=11, markerfacecolor=INK,
+               markeredgecolor=SURFACE, label="LP-Spec (published)"),
+        Line2D([], [], color="none", marker="^", ms=9, markerfacecolor=INK,
+               markeredgecolor=SURFACE, label="Autoregressive"),
+    ]
+    fig.legend(handles=handles, loc="lower left", bbox_to_anchor=(0.775, 0.11),
+               frameon=False, fontsize=9.5, labelspacing=1.3,
+               handletextpad=0.8, labelcolor=INK_2)
+    fig.subplots_adjust(left=0.125, right=0.78, top=0.97, bottom=0.11)
+    out = outdir / "fig_headline_alpaca.png"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    return out
+
+
 def fig_draft_receipt(outdir: Path) -> Path:
     """Receipt: NPU-vs-PIM draft throughput collapses as σ tightens (μ_th=1)."""
     drive = load_drive()
@@ -865,6 +932,7 @@ FIGURES = {
     "frontier_full": lambda o, a: fig_frontier_full(o),
     "edp_mu": lambda o, a: fig_edp_mu(o),
     "validation": lambda o, a: fig_validation(o),
+    "headline": lambda o, a: fig_headline(o),
     "draft_receipt": lambda o, a: fig_draft_receipt(o),
 }
 

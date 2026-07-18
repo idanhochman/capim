@@ -460,6 +460,60 @@ Figure~\ref{fig:surface_gsm8k} draws the same sweep on GSM8K, and its surface si
 
 What the sweep licenses is a bounded range rather than a value. The two loosest gates are dominated outright, at matched μ\textsubscript{th}: tightening σ\textsubscript{th} = −2.5 to −2.0 raises both throughput and energy efficiency at every one of the seven routing settings, on both datasets, and tightening −2.0 to −1.5 does the same again. Neither comparison appeals to any scalar that trades the two axes off, and holding μ\textsubscript{th} fixed is what makes it fair -- a looser gate at a looser routing setting can still beat a tighter gate run PIM-resident on energy alone. That leaves σ\textsubscript{th} between −1.5 and −0.5, where no gate dominates another and the surviving tree runs from 1.6 to 5.0 nodes on average, out of the 59 that were drafted (Table~\ref{tab:trees}). Nothing in that range is compiled into the design, σ\textsubscript{th} and μ\textsubscript{th} are both left as run-time controls.
 
+\subsection{Headline results}\label{sec:headline}
+
+Section~\ref{sec:dse} swept σ\textsubscript{th} and μ\textsubscript{th} jointly and did not resolve either to a single value. σ\textsubscript{th} is bounded to between −1.5 and −0.5 by pairwise dominance and left there; μ\textsubscript{th} was shown to move the design along a throughput--energy exchange at whichever gate σ\textsubscript{th} is set to, from a fast, high-power corner at μ\textsubscript{th} = 1 to a slow, low-power corner at μ\textsubscript{th} = 64. Both remain run-time controls, not values compiled into the design. What this section adds is a comparison: fixing both thresholds at one setting each so that CAPIM can be placed against LP-Spec and against standard autoregressive decoding at concrete, reproducible points, rather than as a region.
+
+Two settings are carried forward, one from each corner of that exchange, both holding σ\textsubscript{th} at −1.0: \emph{Standard} (μ\textsubscript{th} = 1) and \emph{Low-power} (μ\textsubscript{th} = 64). σ\textsubscript{th} = −1.0 is the choice at both corners. At μ\textsubscript{th} = 1 it dominates both of its neighbours in the −1.5-to−0.5 range outright (Table~\ref{tab:surface}: 152.9 token/s / 46.1 token/J beats −0.5's 150.9/43.8 and −1.5's 142.0/45.7 on both axes at once). At μ\textsubscript{th} = 64 it still dominates −0.5 outright, and against −1.5 it trades under one percent of energy efficiency for ten percent more throughput (138.8/63.8 against 126.2/64.4) -- not strict dominance, but decisive enough to make the same choice at both ends. Holding σ\textsubscript{th} fixed across both settings means the two points differ only in μ\textsubscript{th}.
+
+Figure~\ref{fig:headline} places both CAPIM points against LP-Spec and against autoregressive decoding. GSM8K is left out: LP-Spec has no published result on that dataset, and comparing CAPIM's GSM8K numbers against a baseline that was never evaluated there would not be a fair reading. Both CAPIM points sit above and to the right of both LP-Spec references on both axes at once. Autoregressive decoding -- one full target-model forward pass per token, entirely on the NPU, with no speculation at all -- sits far enough below either that it only anchors the scale.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{Figures/fig12_headline_alpaca.png}
+\caption{CAPIM's two operating points against LP-Spec and autoregressive decoding, Alpaca.}
+\label{fig:headline}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{lccc}
+\toprule
+ & Throughput (token/s) & Energy efficiency (token/J) & EDP (s\textperiodcentered mJ) \\
+\midrule
+CAPIM -- Standard & 152.9 & 46.1 & 0.142 \\
+CAPIM -- Low-power & 138.8 & 63.8 & 0.113 \\
+LP-Spec (simulated, best) & 126.9 & 31.9 & 0.247 \\
+LP-Spec (published) & 73.4 & 32.6 & 0.418 \\
+Autoregressive & 6.5 & 5.2 & 29.500 \\
+\bottomrule
+\end{tabular}
+\caption{The values underlying Figure~\ref{fig:headline}, including energy-delay product (EDP), Alpaca.}
+\label{tab:headline_values}
+\end{table}
+
+Table~\ref{tab:headline_ratio} restates the same comparison as ratios. Against LP-Spec's best simulated configuration, Standard reaches 1.21x the throughput and 1.44x the energy efficiency, and Low-power reaches 1.09x and 2.00x. Against LP-Spec's own published pair the margin widens further, to 2.08x/1.41x and 1.89x/1.96x. The result worth pointing out is Low-power's throughput: Low-power is the setting tuned to trade throughput away for energy efficiency, yet it still reaches a higher throughput than LP-Spec's best simulated configuration, not only a higher energy efficiency -- the trade made in choosing it costs nothing relative to LP-Spec on either axis.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{lccc}
+\toprule
+CAPIM & LP-Spec (simulated, best) & LP-Spec (published) & Autoregressive \\
+\midrule
+Standard (μ\textsubscript{th} = 1) & 1.21x, 1.44x & 2.08x, 1.41x & 23.36x, 8.90x \\
+Low-power (μ\textsubscript{th} = 64) & 1.09x, 2.00x & 1.89x, 1.96x & 21.21x, 12.33x \\
+\bottomrule
+\end{tabular}
+\caption{CAPIM's two operating points against LP-Spec and autoregressive baselines, as ratios (throughput, energy efficiency), Alpaca.}
+\label{tab:headline_ratio}
+\end{table}
+
+This project targets a 20--30\% improvement in energy efficiency and a 1.5x--2x improvement in throughput over LP-Spec. The energy target is met and then exceeded: even Standard, the faster of the two settings, is 44\% more energy-efficient than LP-Spec's best simulated configuration, and Low-power reaches 2.00x. The throughput target is not met against LP-Spec's best simulated configuration, where Standard reaches only 1.21x and Low-power 1.09x, though it is met against LP-Spec's own published figure, where Standard reaches 2.08x and Low-power 1.89x. The shortfall against LP-Spec's best configuration is structural, not a tuning failure: MEDUSA drafts by firing every one of its heads in a single parallel pass, proposing an entire candidate tree in one shot, while EAGLE-2's draft head runs autoregressively, reading back its own hidden state one step at a time to grow the draft tree -- a sequential cost MEDUSA never pays. CAPIM's higher acceptance rate and smaller, better-targeted tree earn back most of that cost against LP-Spec's fastest configuration, but not all of it.
+
+Neither setting is a ceiling, though. μ\textsubscript{th} is a run-time control, not a value fixed at design time, and Section~\ref{sec:dse} already swept it continuously between Standard and Low-power, so a device can move along the same exchange itself, at run time, according to its own battery and thermal state. That run-time controllability is itself part of this project's contribution, easy to lose sight of if these two points are read as the whole story.
+
 \subsection{Evaluation Metrics}
 To assess the efficacy of the proposed architecture, the following Key Performance Indicators (KPIs) will be measured and analysed:
 \begin{itemize}
