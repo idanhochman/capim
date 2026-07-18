@@ -18,3 +18,6 @@ results/
 *.swo
 .DS_Store
 *:Zone.Identifier
+
+# doc
+doc/main.*
