@@ -327,7 +327,7 @@ CAPIM keeps LP-Spec's PIM and NPU substrate as given, since neither device is th
 \label{fig:capim-soc}
 \end{figure}
 
-Figure~\ref{fig:capim-dataflow} shows the dataflow once for prefill and once for the decode loop that follows it, with every stage tagged to the device that executes it. Prefill runs once, on the NPU, as a single high-parallelism, compute-bound pass over the prompt; it writes the resulting KV-cache into the PIM banks and produces the target model's hidden features for the prompt's last position, which seed the first decoding iteration's drafting. Every decoding iteration thereafter repeats the same stages, and each one reseeds the next: the target model's verification pass produces fresh hidden features for whichever tokens it accepts, and those, not prefill's, seed the following iteration's draft. Drafting itself runs on PIM: EAGLE-2's draft head is a lightweight autoregressive decoder in its own right, and it grows the candidate tree one expansion step at a time. Its linear kernels -- the QKV and feedforward projections, and the attention score and context matrix multiplications themselves -- run on PIM; only its non-linear operations -- RMSNorm and the attention and sampling softmaxes -- are handed to the NPU at each step instead. After each expansion step, a controller (\textsc{ctrl} in the figure, developed fully in Section~\ref{sec:controller}) checks the confidence accumulated along every surviving branch against a threshold, σ\textsubscript{th}, and any branch that falls below it is stopped immediately rather than expanded again. This repeats until drafting is judged complete, at which point the same controller compares the size of the surviving tree, μ, against a second threshold, μ\textsubscript{th}. That comparison decides where verification runs: a tree smaller than μ\textsubscript{th} has its verification pass offloaded to PIM as far as the near-bank datapath allows, while a tree at or above it has its linear kernels column-split between PIM and the NPU instead. Non-linear operations are handed to the NPU in both routes. The tokens verification accepts become the seed for the next decoding iteration's drafting, and the loop repeats.
+Figure~\ref{fig:capim-dataflow} shows the dataflow once for prefill and once for the decode loop that follows it, with every stage tagged to the device that executes it. Prefill runs once, on the NPU, as a single high-parallelism, compute-bound pass over the prompt; it writes the resulting KV-cache into the PIM banks and produces the target model's hidden features for the prompt's last position, which seed the first decoding iteration's drafting. Every decoding iteration thereafter repeats the same stages, and each one reseeds the next: the target model's verification pass produces fresh hidden features for whichever tokens it accepts, and those, not prefill's, seed the following iteration's draft. Drafting itself runs on PIM: EAGLE-2's draft head is a lightweight autoregressive decoder in its own right, and it grows the candidate tree one expansion step at a time. Its linear kernels -- the QKV and feedforward projections, and the attention score and context matrix multiplications themselves -- run on PIM; only its non-linear operations -- RMSNorm and the attention and sampling softmaxes -- are handed to the NPU at each step instead. After each expansion step, a controller (\textsc{ctrl} in the figure, developed fully in Section~\ref{sec:controller}) checks the confidence accumulated along every surviving branch against a threshold, σ\textsubscript{th}, and any branch that falls below it is stopped immediately rather than expanded again. This repeats until drafting is judged complete, at which point the same controller compares the size of the surviving tree, μ, against a second threshold, μ\textsubscript{th}. That comparison decides where verification runs: a tree smaller than μ\textsubscript{th} has its verification pass offloaded to PIM as far as the near-bank datapath allows, while a tree at or above it has its FC kernels column-split between PIM and the NPU instead; attention's matrix multiplications stay on PIM regardless of which route is taken. Non-linear operations are handed to the NPU in both routes. The tokens verification accepts become the seed for the next decoding iteration's drafting, and the loop repeats.
  
 
 \begin{figure}[H]
@@ -398,7 +398,7 @@ The defensible objection is to the marginal node rather than the average one, an
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\textwidth]{Figures/fig7_saturation.png}
+\includegraphics[width=0.8\textwidth]{Figures/draft_tree_saturation_plot.png}
 \caption{Accepted tokens per decoding iteration against draft tree size, obtained by sweeping the confidence threshold over the ungated EAGLE-2 traces.}
 \label{fig:saturation}
 \end{figure}
@@ -421,7 +421,7 @@ On that basis the cost model is accepted as the instrument for the remainder of 
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\textwidth]{Figures/fig9_validation.png}
+\includegraphics[width=0.8\textwidth]{Figures/cost_model_validation_plot.png}
 \caption{The reconstructed LP-Spec baseline on Alpaca, swept across draft tree size, against the throughput and energy efficiency LP-Spec reports for itself~\cite{he2025lpspec}. Marker colour encodes the fixed speculation length; the black cross is LP-Spec's own published operating point.}
 \label{fig:validation}
 \end{figure}
@@ -432,11 +432,11 @@ On that basis the cost model is accepted as the instrument for the remainder of 
 
 Two thresholds govern CAPIM, and neither has been given a value. Section~\ref{sec:pruning} established what a confidence gate does to the draft tree, measured against the drafting algorithm and the workload alone. The routing threshold has not been exercised at all. Both are taken up here, on the two axes a battery-powered device is judged on, by sweeping them jointly through the cost model that Section~\ref{sec:validation} accepted.
 
-The two thresholds are not the same kind of quantity. σ\textsubscript{th} changes what is computed: it decides how many of the 59 drafted nodes reach the verification pass, and its effect on the tree was measured in Section~\ref{sec:pruning} without reference to any hardware. μ\textsubscript{th} changes where that work is computed: every surviving tree is measured against it, and a tree smaller than the threshold has its verification pass offloaded to PIM as far as the near-bank datapath allows, while a tree larger than it has its linear kernels column-split between PIM and the NPU (Section~\ref{sec:routing}). The nonlinear operations are handed to the NPU in both cases, so neither route runs on PIM alone. One threshold removes work and the other routes it.
+The two thresholds are not the same kind of quantity. σ\textsubscript{th} changes what is computed: it decides how many of the 59 drafted nodes reach the verification pass, and its effect on the tree was measured in Section~\ref{sec:pruning} without reference to any hardware. μ\textsubscript{th} changes where that work is computed: every surviving tree is measured against it, and a tree smaller than the threshold has its verification pass offloaded to PIM as far as the near-bank datapath allows, while a tree larger than it has its FC kernels column-split between PIM and the NPU (Section~\ref{sec:routing}); attention stays PIM-resident in both routes. The nonlinear operations are handed to the NPU in both cases, so neither route runs on PIM alone. One threshold removes work and the other routes it.
 
 The sweep is asked to map the exchange between the two axes and to establish what each threshold controls inside it, rather than to nominate a winner. A single objective would rank the operating points and return one optimal mode, and would discard everything else the range has to offer. A mobile device may want different operating modes in different situations. Which point is preferred can depend on the battery remaining, on the thermal headroom, and on whether a user is waiting for the output. An architecture that settles the choice at design time has answered a question the device might be better placed to answer at run-time. What the sweep is asked for is therefore the reachable region of the energy-latency plane, and the operating modes available inside it.
 
-Table~\ref{tab:surface} gives the sweep in full, and Figure~\ref{fig:surface_alpaca} draws the Alpaca half of it. Each gate traces its own curve through the plane, and μ\textsubscript{th} is travel along that curve, from the fast, high-power corner at μ\textsubscript{th} = 1 to the slow, low-power one at μ\textsubscript{th} = 64. The curves are long enough to be worth having. Holding σ\textsubscript{th} at −1.0 and moving μ\textsubscript{th} alone carries the design from 152.9 token/s at 46.1 token/J to 138.8 token/s at 63.8 token/J, which buys 38\% more energy efficiency for 9\% less throughput. The same movement is present at every gate. This is the exchange the architecture offers, and μ\textsubscript{th} is the control that walks along it.
+Table~\ref{tab:surface} gives the sweep in full, and Figure~\ref{fig:surface_alpaca} draws the Alpaca half of it. Each gate traces its own curve through the plane, and μ\textsubscript{th} is travel along that curve, from the fast, high-power corner at μ\textsubscript{th} = 1 to the slow, low-power one at μ\textsubscript{th} = 64. The curves are long enough to be worth having. Holding σ\textsubscript{th} at −1.0 and moving μ\textsubscript{th} alone carries the design from 153.0 token/s at 46.2 token/J to 138.8 token/s at 63.8 token/J, which buys 38\% more energy efficiency for 9\% less throughput. The same movement is present at every gate. This is the exchange the architecture offers, and μ\textsubscript{th} is the control that walks along it.
 
 
 \begin{table}[H]
@@ -450,18 +450,18 @@ Table~\ref{tab:surface} gives the sweep in full, and Figure~\ref{fig:surface_alp
 σ\textsubscript{th} & 1 & 2 & 4 & 8 & 12 & 16 & 64 \\
 \midrule
 \multicolumn{8}{l}{\emph{Alpaca}} \\
-−0.5 & 150.9 / 43.8 & 144.6 / 51.6 & 141.7 / 56.5 & 138.4 / 60.6 & 138.4 / 60.6 & 138.4 / 60.6 & 138.4 / 60.6 \\
-−1.0 & 152.9 / 46.1 & 149.5 / 50.2 & 146.2 / 55.3 & 139.1 / 63.5 & 138.9 / 63.8 & 138.8 / 63.8 & 138.8 / 63.8 \\
-−1.5 & 142.0 / 45.7 & 140.8 / 47.2 & 138.7 / 50.4 & 128.6 / 61.8 & 126.4 / 64.3 & 126.2 / 64.4 & 126.2 / 64.4 \\
-−2.0 & 123.5 / 42.8 & 123.2 / 43.2 & 122.5 / 44.3 & 114.4 / 52.9 & 107.7 / 60.6 & 106.4 / 62.1 & 106.3 / 62.2 \\
-−2.5 & 103.1 / 38.3 & 103.1 / 38.4 & 102.9 / 38.6 & 99.8 / 41.7 & 91.6 / 49.6 & 86.1 / 55.8 & 84.2 / 58.0 \\
+−0.5 & 151.0 / 43.9 & 144.6 / 51.7 & 141.7 / 56.5 & 138.4 / 60.6 & 138.4 / 60.6 & 138.4 / 60.6 & 138.4 / 60.6 \\
+−1.0 & 153.0 / 46.2 & 149.6 / 50.3 & 146.2 / 55.3 & 139.1 / 63.6 & 138.9 / 63.8 & 138.8 / 63.8 & 138.8 / 63.8 \\
+−1.5 & 142.1 / 45.8 & 140.9 / 47.3 & 138.8 / 50.4 & 128.6 / 61.8 & 126.4 / 64.3 & 126.2 / 64.4 & 126.2 / 64.4 \\
+−2.0 & 123.6 / 42.9 & 123.3 / 43.3 & 122.6 / 44.4 & 114.4 / 53.0 & 107.7 / 60.7 & 106.4 / 62.1 & 106.3 / 62.2 \\
+−2.5 & 103.2 / 38.4 & 103.1 / 38.5 & 103.0 / 38.7 & 99.8 / 41.8 & 91.6 / 49.6 & 86.1 / 55.8 & 84.2 / 58.0 \\
 \midrule
 \multicolumn{8}{l}{\emph{GSM8K}} \\
-−0.5 & 160.2 / 47.6 & 155.4 / 53.5 & 152.1 / 58.8 & 146.1 / 65.9 & 146.1 / 65.9 & 146.1 / 65.9 & 146.1 / 65.9 \\
-−1.0 & 155.4 / 48.7 & 153.5 / 51.0 & 150.5 / 55.3 & 140.1 / 67.5 & 139.8 / 67.8 & 139.8 / 67.8 & 139.8 / 67.8 \\
-−1.5 & 140.0 / 47.1 & 139.6 / 47.7 & 138.3 / 49.6 & 126.1 / 63.5 & 123.3 / 67.0 & 123.1 / 67.2 & 123.1 / 67.2 \\
-−2.0 & 120.0 / 43.0 & 120.0 / 43.1 & 119.6 / 43.6 & 112.2 / 51.3 & 104.1 / 60.7 & 102.3 / 63.0 & 101.9 / 63.4 \\
-−2.5 & 102.6 / 38.9 & 102.6 / 38.9 & 102.5 / 39.0 & 100.4 / 40.9 & 92.0 / 48.6 & 85.4 / 56.1 & 82.6 / 59.3 \\
+−0.5 & 160.3 / 47.7 & 155.5 / 53.6 & 152.1 / 58.8 & 146.1 / 65.9 & 146.1 / 65.9 & 146.1 / 65.9 & 146.1 / 65.9 \\
+−1.0 & 155.5 / 48.8 & 153.6 / 51.2 & 150.6 / 55.4 & 140.1 / 67.5 & 139.8 / 67.8 & 139.8 / 67.8 & 139.8 / 67.8 \\
+−1.5 & 140.1 / 47.3 & 139.7 / 47.8 & 138.4 / 49.7 & 126.1 / 63.5 & 123.3 / 67.0 & 123.1 / 67.2 & 123.1 / 67.2 \\
+−2.0 & 120.1 / 43.2 & 120.0 / 43.3 & 119.7 / 43.8 & 112.2 / 51.4 & 104.1 / 60.8 & 102.3 / 63.0 & 101.9 / 63.4 \\
+−2.5 & 102.6 / 39.0 & 102.6 / 39.0 & 102.5 / 39.1 & 100.4 / 41.1 & 92.0 / 48.7 & 85.3 / 56.1 & 82.6 / 59.3 \\
 \bottomrule
 \end{tabular}
 \caption{The joint threshold sweep. Each cell gives throughput in token/s and energy efficiency in token/J for one (σ\textsubscript{th}, μ\textsubscript{th}) pair.}
@@ -470,7 +470,7 @@ Table~\ref{tab:surface} gives the sweep in full, and Figure~\ref{fig:surface_alp
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.85\textwidth]{Figures/fig10_surface_alpaca.png}
+\includegraphics[width=0.85\textwidth]{Figures/threshold_tradeoff_alpaca_plot.png}
 \caption{The (σ\textsubscript{th}, μ\textsubscript{th}) sweep on Alpaca. Line colour encodes the confidence gate while dot fill encodes the routing threshold.}
 \label{fig:surface_alpaca}
 \end{figure}
@@ -497,11 +497,11 @@ The two thresholds are connected: the largest tree a gate ever produces is a cei
 \label{tab:trees}
 \end{table}
 
-Figure~\ref{fig:surface_gsm8k} draws the same sweep on GSM8K, and its surface sits up and to the right of Alpaca's throughout: 160.2 token/s at its fastest against 152.9, and 67.8 token/J at its most efficient against 64.4. This is the expected result: Section~\ref{sec:pruning} found GSM8K's more confident draft keeping a larger share of its tree at every gate, and that advantage carries through to every point on this surface. What the two surfaces do not agree on is where the gate itself should sit. Alpaca's fastest point belongs to σ\textsubscript{th} = −1.0, GSM8K's to the tighter σ\textsubscript{th} = −0.5, for the same reason: σ\textsubscript{th} is an absolute threshold rather than a fixed tree size, so the same number is not the same tree on a more confident workload.
+Figure~\ref{fig:surface_gsm8k} draws the same sweep on GSM8K, and its surface sits up and to the right of Alpaca's throughout: 160.3 token/s at its fastest against 153.0, and 67.8 token/J at its most efficient against 64.4. This is the expected result: Section~\ref{sec:pruning} found GSM8K's more confident draft keeping a larger share of its tree at every gate, and that advantage carries through to every point on this surface. What the two surfaces do not agree on is where the gate itself should sit. Alpaca's fastest point belongs to σ\textsubscript{th} = −1.0, GSM8K's to the tighter σ\textsubscript{th} = −0.5, for the same reason: σ\textsubscript{th} is an absolute threshold rather than a fixed tree size, so the same number is not the same tree on a more confident workload.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.85\textwidth]{Figures/fig11_surface_gsm8k.png}
+\includegraphics[width=0.85\textwidth]{Figures/threshold_tradeoff_gsm8k_plot.png}
 \caption{The (σ\textsubscript{th}, μ\textsubscript{th}) sweep on GSM8K. Line colour encodes the confidence gate while dot fill encodes the routing threshold.}
 \label{fig:surface_gsm8k}
 \end{figure}
@@ -512,13 +512,13 @@ What the sweep licenses is a bounded range rather than a value. The two loosest 
 
 Section~\ref{sec:tradeoff} swept σ\textsubscript{th} and μ\textsubscript{th} jointly and did not resolve either to a single value. σ\textsubscript{th} is bounded to between −1.5 and −0.5 by pairwise dominance and left there; μ\textsubscript{th} was shown to move the design along a throughput--energy exchange at whichever gate σ\textsubscript{th} is set to, from a fast, high-power corner at μ\textsubscript{th} = 1 to a slow, low-power corner at μ\textsubscript{th} = 64. Both remain run-time controls, not values compiled into the design. What this section adds is a comparison: fixing both thresholds at one setting each so that CAPIM can be placed against LP-Spec and against standard autoregressive decoding at concrete, reproducible points, rather than as a region.
 
-Two settings are carried forward, one from each corner of that exchange, both holding σ\textsubscript{th} at −1.0: \emph{Standard} (μ\textsubscript{th} = 1) and \emph{Low-power} (μ\textsubscript{th} = 64). σ\textsubscript{th} = −1.0 is the choice at both corners. At μ\textsubscript{th} = 1 it dominates both of its neighbours in the −1.5-to−0.5 range outright (Table~\ref{tab:surface}: 152.9 token/s / 46.1 token/J beats −0.5's 150.9/43.8 and −1.5's 142.0/45.7 on both axes at once). At μ\textsubscript{th} = 64 it still dominates −0.5 outright, and against −1.5 it trades under one percent of energy efficiency for ten percent more throughput (138.8/63.8 against 126.2/64.4) -- not strict dominance, but decisive enough to make the same choice at both ends. Holding σ\textsubscript{th} fixed across both settings means the two points differ only in μ\textsubscript{th}.
+Two settings are carried forward, one from each corner of that exchange, both holding σ\textsubscript{th} at −1.0: \emph{Standard} (μ\textsubscript{th} = 1) and \emph{Low-power} (μ\textsubscript{th} = 64). σ\textsubscript{th} = −1.0 is the choice at both corners. At μ\textsubscript{th} = 1 it dominates both of its neighbours in the −1.5-to−0.5 range outright (Table~\ref{tab:surface}: 153.0 token/s / 46.2 token/J beats −0.5's 151.0/43.9 and −1.5's 142.1/45.8 on both axes at once). At μ\textsubscript{th} = 64 it still dominates −0.5 outright, and against −1.5 it trades under one percent of energy efficiency for ten percent more throughput (138.8/63.8 against 126.2/64.4) -- not strict dominance, but decisive enough to make the same choice at both ends. Holding σ\textsubscript{th} fixed across both settings means the two points differ only in μ\textsubscript{th}.
 
 Figure~\ref{fig:headline} places both CAPIM points against LP-Spec and against autoregressive decoding. GSM8K is left out: LP-Spec has no published result on that dataset, and comparing CAPIM's GSM8K numbers against a baseline that was never evaluated there would not be a fair reading. Both CAPIM points sit above and to the right of both LP-Spec references on both axes at once. Autoregressive decoding -- one full target-model forward pass per token, entirely on the NPU, with no speculation at all -- sits far enough below either that it only anchors the scale.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.72\textwidth]{Figures/fig12_headline_alpaca.png}
+\includegraphics[width=0.72\textwidth]{Figures/headline_comparison_alpaca_plot.png}
 \caption{CAPIM's two operating points against LP-Spec and autoregressive decoding, Alpaca.}
 \label{fig:headline}
 \end{figure}
@@ -530,7 +530,7 @@ Figure~\ref{fig:headline} places both CAPIM points against LP-Spec and against a
 \toprule
  & Throughput (token/s) & Energy efficiency (token/J) & EDP (s\textperiodcentered mJ) \\
 \midrule
-CAPIM -- Standard & 152.9 & 46.1 & 0.142 \\
+CAPIM -- Standard & 153.0 & 46.2 & 0.141 \\
 CAPIM -- Low-power & 138.8 & 63.8 & 0.113 \\
 LP-Spec (simulated, best) & 126.9 & 31.9 & 0.247 \\
 LP-Spec (published) & 73.4 & 32.6 & 0.418 \\
@@ -541,7 +541,7 @@ Autoregressive & 6.5 & 5.2 & 29.500 \\
 \label{tab:headline_values}
 \end{table}
 
-Table~\ref{tab:headline_ratio} restates the same comparison as ratios. Against LP-Spec's best simulated configuration, Standard reaches 1.21x the throughput and 1.44x the energy efficiency, and Low-power reaches 1.09x and 2.00x. Against LP-Spec's own published pair the margin widens further, to 2.08x/1.41x and 1.89x/1.96x. The result worth pointing out is Low-power's throughput: Low-power is the setting tuned to trade throughput away for energy efficiency, yet it still reaches a higher throughput than LP-Spec's best simulated configuration, not only a higher energy efficiency -- the trade made in choosing it costs nothing relative to LP-Spec on either axis.
+Table~\ref{tab:headline_ratio} restates the same comparison as ratios. Against LP-Spec's best simulated configuration, Standard reaches 1.21x the throughput and 1.45x the energy efficiency, and Low-power reaches 1.09x and 2.00x. Against LP-Spec's own published pair the margin widens further, to 2.08x/1.42x and 1.89x/1.96x. The result worth pointing out is Low-power's throughput: Low-power is the setting tuned to trade throughput away for energy efficiency, yet it still reaches a higher throughput than LP-Spec's best simulated configuration, not only a higher energy efficiency -- the trade made in choosing it costs nothing relative to LP-Spec on either axis.
 
 \begin{table}[H]
 \centering
@@ -550,7 +550,7 @@ Table~\ref{tab:headline_ratio} restates the same comparison as ratios. Against L
 \toprule
 CAPIM & LP-Spec (simulated, best) & LP-Spec (published) & Autoregressive \\
 \midrule
-Standard (μ\textsubscript{th} = 1) & 1.21x, 1.44x & 2.08x, 1.41x & 23.36x, 8.90x \\
+Standard (μ\textsubscript{th} = 1) & 1.21x, 1.45x & 2.08x, 1.42x & 23.38x, 8.92x \\
 Low-power (μ\textsubscript{th} = 64) & 1.09x, 2.00x & 1.89x, 1.96x & 21.21x, 12.33x \\
 \bottomrule
 \end{tabular}
@@ -558,7 +558,7 @@ Low-power (μ\textsubscript{th} = 64) & 1.09x, 2.00x & 1.89x, 1.96x & 21.21x, 12
 \label{tab:headline_ratio}
 \end{table}
 
-This project targets a 20--30\% improvement in energy efficiency and a 1.5x--2x improvement in throughput over LP-Spec. The energy target is met and then exceeded: even Standard, the faster of the two settings, is 44\% more energy-efficient than LP-Spec's best simulated configuration, and Low-power reaches 2.00x. The throughput target is not met against LP-Spec's best simulated configuration, where Standard reaches only 1.21x and Low-power 1.09x, though it is met against LP-Spec's own published figure, where Standard reaches 2.08x and Low-power 1.89x. The shortfall against LP-Spec's best configuration is structural, not a tuning failure: MEDUSA drafts by firing every one of its heads in a single parallel pass, proposing an entire candidate tree in one shot, while EAGLE-2's draft head runs autoregressively, reading back its own hidden state one step at a time to grow the draft tree -- a sequential cost MEDUSA never pays. CAPIM's higher acceptance rate and smaller, better-targeted tree earn back most of that cost against LP-Spec's fastest configuration, but not all of it.
+This project targets a 20--30\% improvement in energy efficiency and a 1.5x--2x improvement in throughput over LP-Spec. The energy target is met and then exceeded: even Standard, the faster of the two settings, is 45\% more energy-efficient than LP-Spec's best simulated configuration, and Low-power reaches 2.00x. The throughput target is not met against LP-Spec's best simulated configuration, where Standard reaches only 1.21x and Low-power 1.09x, though it is met against LP-Spec's own published figure, where Standard reaches 2.08x and Low-power 1.89x. The shortfall against LP-Spec's best configuration is structural, not a tuning failure: MEDUSA drafts by firing every one of its heads in a single parallel pass, proposing an entire candidate tree in one shot, while EAGLE-2's draft head runs autoregressively, reading back its own hidden state one step at a time to grow the draft tree -- a sequential cost MEDUSA never pays. CAPIM's higher acceptance rate and smaller, better-targeted tree earn back most of that cost against LP-Spec's fastest configuration, but not all of it.
 
 Neither setting is a ceiling, though. μ\textsubscript{th} is a run-time control, not a value fixed at design time, and Section~\ref{sec:tradeoff} already swept it continuously between Standard and Low-power, so a device can move along the same exchange itself, at run time, according to its own battery and thermal state. That run-time controllability is itself part of this project's contribution, easy to lose sight of if these two points are read as the whole story.
 
