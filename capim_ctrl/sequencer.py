@@ -71,5 +71,5 @@ def route(mu: int, mu_th: int, concurrent_verify: bool = True) -> Route:
     if mu < mu_th:
         return Route(ExecModel.SEQUENTIAL, Device.PIM, False)
     if concurrent_verify:
-        return Route(ExecModel.CONCURRENT, Device.NPU, True)
+        return Route(ExecModel.CONCURRENT, Device.NPU, False)
     return Route(ExecModel.SEQUENTIAL, Device.NPU, False)
