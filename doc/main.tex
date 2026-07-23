@@ -95,15 +95,13 @@
 \section*{\centering Abstract}
 \addcontentsline{toc}{section}{Abstract}
 
-The deployment of Large Language Models (LLMs) on mobile and edge devices is constrained by strict energy budgets, minimal computational resources and limited memory bandwidth. While Processing-In-Memory (PIM) architectures and speculative decoding (SD) techniques have shown potential in mitigating these limitations, existing mobile PIM-based solutions rely on static speculation structures and retrospective pruning, leading to unnecessary computation, energy waste, and avoidable latency. Recent SD techniques, particularly EAGLE-2, demonstrate that model confidence scores can significantly improve decoding efficiency. However, no mobile PIM architecture has been designed to natively exploit this capability.
+On-device LLM inference offers privacy and latency benefits, but mobile platforms have only a fraction of a data centre's memory bandwidth and energy budget, and decoding is dominated by streaming the full weights per token. Processing-in-memory (PIM) cuts this movement cost; speculative decoding (SD) parallelizes the single-stream decoding mobile devices are restricted to. LP-Spec, a state-of-the-art mobile PIM architecture, adopts MEDUSA speculative decoding, drafting candidate token trees and pruning them using retrospective, content-blind acceptance statistics to save energy during verification.
 
-This project investigates whether model confidence can be leveraged as a real-time hardware control signal to enable energy-efficient and low-latency LLM inference on mobile devices. The problem is timely and relevant due to the rapid growth of on-device generative AI applications and the increasing demand for privacy-preserving, low-latency inference without reliance on cloud infrastructure.
+This project asks whether a mobile PIM architecture can instead exploit EAGLE-2, a speculative decoding method that computes a live, per-token confidence score for each drafted token. It asks whether such an architecture can replace MEDUSA drafting and outperform LP-Spec, and whether EAGLE-2's confidence scores, currently used only to rank candidate branches, can instead gate a branch's expansion directly.
 
-To address this challenge, the project proposes CAPIM, a confidence-aware PIM-based architecture that integrates the state-of-the-art EAGLE-2 speculative decoding method. Live model confidence scores are used to dynamically prune speculative draft trees and to guide a runtime scheduling policy that determines whether verification is performed locally in PIM or offloaded to a Neural Processing Unit (NPU).
+The project proposes CAPIM, which integrates EAGLE-2 natively. A confidence gate stops each draft branch once its accumulated log-probability falls below a threshold, and the resulting tree size selects, against a second threshold, whether verification stays PIM-resident or splits with the NPU. CAPIM is evaluated by analytical simulation on Vicuna-7B-v1.3 over Alpaca and GSM8K datasets, priced on one cost model against LP-Spec and autoregressive decoding.
 
-The proposed architecture will be evaluated using architectural simulation based on an LPDDR PIM model, with Qwen2.5 models serving as representative workloads.
-
-The study aims to demonstrate a 20--30\% reduction in energy consumption and a 1.5×--2× latency improvement over state-of-the-art mobile PIM baselines, validating confidence-aware hardware control as an effective approach for efficient on-device LLM inference.
+CAPIM reaches 1.45×--2.00× LP-Spec's best simulated energy efficiency and 1.09×--1.21× its throughput. These results validate confidence-gated pruning and run-time verification routing as an effective basis for energy-efficient, low-latency on-device LLM inference. The architecture also lets the device control the energy--latency trade-off directly, setting the routing threshold to match its own battery and thermal state.
 
 
 % ---------- Table of Contents ----------
@@ -161,7 +159,7 @@ The study aims to demonstrate a 20--30\% reduction in energy consumption and a 1
 \section*{\centering Acknowledgements}
 \addcontentsline{toc}{section}{Acknowledgements}
 
-Thank whomever you wish if you wish or simply remove.
+I would like to thank Dr. Haiyu Mao for supervising this project. Her guidance and feedback throughout shaped both the direction of the research and the rigour with which it was carried out.
 
 % ---------- Main body starts here ----------
 \newpage
