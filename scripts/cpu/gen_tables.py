@@ -28,6 +28,7 @@ DATASETS = ["alpaca", "gsm8k"]
 HEADLINE_DRAFT = "pim"          # draft placement decision: always PIM
 HEADLINE_SIGMA = -1.0
 HEADLINE_MU = {"Standard": 1, "Low-power": 64}
+LSWEEP_DATASET = "alpaca"       # fig:validation is Alpaca-only; tab:lsweep matches it
 
 # LP-Spec's own published Table III figures (not derived from our sim).
 LP_SPEC_PUBLISHED = {"tps": 73.4, "tpj": 32.6, "edp": 0.418}
@@ -131,6 +132,37 @@ def _best_lp_spec(records: List[dict], ds: str) -> dict:
     return max(lp, key=lambda r: r["token_per_s_mean"])
 
 
+def gen_lsweep(records: List[dict]) -> str:
+    """The reconstructed LP-Spec baseline swept across L_spec.
+
+    Alpaca only, matching the section it sits in: the validation compares against
+    LP-Spec's published figures, which are reported on Alpaca, and fig:validation
+    plots that dataset alone.
+    """
+    lp = sorted((r for r in records
+                 if r["driver"] == "lp_spec" and r["dataset"] == LSWEEP_DATASET),
+                key=lambda r: r["config"]["L_spec"])
+    lines = []
+    lines.append(r"\begin{table}[H]")
+    lines.append(r"\centering")
+    lines.append(r"\footnotesize")
+    lines.append(r"\begin{tabular}{ccc}")
+    lines.append(r"\toprule")
+    lines.append(r"L\textsubscript{spec} & Throughput (token/s) & Energy efficiency (token/J) \\")
+    lines.append(r"\midrule")
+    for r in lp:
+        lines.append(f"{r['config']['L_spec']} & {r['token_per_s_mean']:.1f} & "
+                     f"{r['token_per_j_mean']:.1f} \\\\")
+    lines.append(r"\bottomrule")
+    lines.append(r"\end{tabular}")
+    # Kept to one rendered line; the L_spec = 4 optimum is visible in the rows.
+    lines.append(r"\caption{The reconstructed LP-Spec baseline swept across "
+                 r"L\textsubscript{spec}, Alpaca.}")
+    lines.append(r"\label{tab:lsweep}")
+    lines.append(r"\end{table}")
+    return "\n".join(lines)
+
+
 def gen_headline_values(records: List[dict]) -> str:
     capim = _index_capim(records)
     ar = _index_ar(records)["alpaca"]
@@ -200,7 +232,8 @@ def main(argv: Optional[List[str]] = None) -> None:
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--drive-all", default="results/drive_all.json")
     ap.add_argument("--pruning", default="results/pruning_analysis.json")
-    ap.add_argument("--table", choices=["surface", "trees", "headline_values", "headline_ratio", "all"],
+    ap.add_argument("--table", choices=["surface", "trees", "lsweep", "headline_values",
+                                        "headline_ratio", "all"],
                      default="all")
     args = ap.parse_args(argv)
 
@@ -208,6 +241,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     generators = {
         "surface": lambda: gen_surface(records),
         "trees": lambda: gen_trees(load_pruning(args.pruning)),
+        "lsweep": lambda: gen_lsweep(records),
         "headline_values": lambda: gen_headline_values(records),
         "headline_ratio": lambda: gen_headline_ratio(records),
     }
