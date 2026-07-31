@@ -1,36 +1,46 @@
 % ------------------------------------------------------------------------
 % CAPIM PROPOSAL REFERENCES
 % ------------------------------------------------------------------------
-@misc{mutlu2025primer,
-  author = {Onur Mutlu and Saugata Ghose and Juan G{\'o}mez-Luna and Rachata Ausavarungnirun and Mohammad Sadrosadati and Geraldo F. Oliveira},
-  title = {A Modern Primer on Processing-In-Memory},
-  year = {2025},
-  howpublished = {[Online]},
-  note = {Available: \url{https://arxiv.org/abs/2012.03112}.}
+@incollection{mutlu2022primer,
+  author = {Onur Mutlu and Saugata Ghose and Juan G{\'o}mez-Luna and Rachata Ausavarungnirun},
+  title = {A Modern Primer on Processing in Memory},
+  booktitle = {Emerging Computing: From Devices to Systems},
+  editor = {Mohamed M. Sabry Aly and Anupam Chattopadhyay},
+  series = {Computer Architecture and Design Methodologies},
+  publisher = {Springer Nature Singapore},
+  address = {Singapore},
+  pages = {171--243},
+  year = {2022},
+  note = {Available: \url{https://doi.org/10.1007/978-981-16-7487-7_7}.}
 }
 
-@misc{leviathan2023speculative,
+@inproceedings{leviathan2023speculative,
   author = {Yaniv Leviathan and Matan Kalman and Yossi Matias},
   title = {Fast Inference from Transformers via Speculative Decoding},
+  booktitle = {Proceedings of the 40th International Conference on Machine Learning},
+  pages = {19274--19286},
+  publisher = {PMLR},
   year = {2023},
-  howpublished = {[Online]},
-  note = {Available: \url{https://arxiv.org/abs/2211.17192}.}
+  note = {Available: \url{https://proceedings.mlr.press/v202/leviathan23a.html}.}
 }
 
-@misc{he2025papi,
+@inproceedings{he2025papi,
   author = {Yintao He and Haiyu Mao and Christina Giannoula and Mohammad Sadrosadati and Juan G{\'o}mez-Luna and Huawei Li and Xiaowei Li and Ying Wang and Onur Mutlu},
   title = {{PAPI}: Exploiting Dynamic Parallelism in Large Language Model Decoding with a Processing-In-Memory-Enabled Computing System},
+  booktitle = {Proceedings of the 30th {ACM} International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 2},
+  pages = {766--782},
+  publisher = {ACM},
   year = {2025},
-  howpublished = {[Online]},
-  note = {Available: \url{https://arxiv.org/abs/2502.15470}.}
+  note = {Available: \url{https://doi.org/10.1145/3676641.3716009}.}
 }
 
-@misc{he2025lpspec,
-  author = {Siyuan He and Zhantong Zhu and Yintao He and Tianyu Jia},
+@inproceedings{he2025lpspec,
+  author = {Siyuan He and Zhantong Zhu and Yandong He and Tianyu Jia},
   title = {{LP-Spec}: Leveraging {LPDDR} {PIM} for Efficient {LLM} Mobile Speculative Inference with Architecture-Dataflow Co-Optimization},
+  booktitle = {2025 {IEEE/ACM} International Conference On Computer Aided Design (ICCAD)},
+  pages = {1--9},
   year = {2025},
-  howpublished = {[Online]},
-  note = {Available: \url{https://arxiv.org/abs/2508.07227}.}
+  note = {Available: \url{https://doi.org/10.1109/ICCAD66269.2025.11240889}.}
 }
 
 @misc{cha2026lp5x,
@@ -49,20 +59,25 @@
   note = {29th ACM International Conference on Architectural Support for Programming Languages and Operating Systems (ASPLOS '24). Available: \url{https://doi.org/10.1145/3620665.3640422}.}
 }
 
-@misc{chen2026edge,
+@article{chen2026edge,
   author = {Zhixiong Chen and Bingjie Zhu and Jiangzhou Wang and Hyundong Shin and Arumugam Nallanathan and Dusit Niyato},
   title = {Network Edge Inference for Large Language Models: Principles, Techniques, and Opportunities},
+  journal = {{ACM} Computing Surveys},
+  volume = {58},
+  number = {12},
+  pages = {1--35},
   year = {2026},
-  howpublished = {[Online]},
-  note = {Available: \url{https://arxiv.org/abs/2604.22906}.}
+  note = {Available: \url{https://doi.org/10.1145/3809166}.}
 }
 
-@misc{xia2024survey,
+@inproceedings{xia2024survey,
   author = {Heming Xia and Zhe Yang and Qingxiu Dong and Peiyi Wang and Yongqi Li and Tao Ge and Tianyu Liu and Wenjie Li and Zhifang Sui},
   title = {Unlocking Efficiency in Large Language Model Inference: A Comprehensive Survey of Speculative Decoding},
+  booktitle = {Findings of the Association for Computational Linguistics: {ACL} 2024},
+  pages = {7655--7671},
+  publisher = {Association for Computational Linguistics},
   year = {2024},
-  howpublished = {[Online]},
-  note = {Available: \url{https://arxiv.org/abs/2401.07851}.}
+  note = {Available: \url{https://doi.org/10.18653/v1/2024.findings-acl.456}.}
 }
 
 @misc{chen2025elib,
@@ -73,12 +88,14 @@
   note = {Available: \url{https://arxiv.org/abs/2508.11269}.}
 }
 
-@misc{laskaridis2024melting,
+@inproceedings{laskaridis2024melting,
   author = {Stefanos Laskaridis and Kleomenis Katevas and Lorenzo Minto and Hamed Haddadi},
   title = {{MELTing} Point: Mobile Evaluation of Language Transformers},
+  booktitle = {Proceedings of the 30th Annual International Conference on Mobile Computing and Networking},
+  pages = {890--907},
+  publisher = {ACM},
   year = {2024},
-  howpublished = {[Online]},
-  note = {Proc. ACM MobiCom 2024. Available: \url{https://arxiv.org/abs/2403.12844}.}
+  note = {Available: \url{https://doi.org/10.1145/3636534.3690668}.}
 }
 
 @misc{tummalapalli2026edge,
@@ -89,43 +106,55 @@
   note = {Available: \url{https://arxiv.org/abs/2603.23640}.}
 }
 
-@misc{cai2024medusa,
+@inproceedings{cai2024medusa,
   author = {Tianle Cai and Yuhong Li and Zhengyang Geng and Hongwu Peng and Jason D. Lee and Deming Chen and Tri Dao},
   title = {{MEDUSA}: Simple {LLM} Inference Acceleration Framework with Multiple Decoding Heads},
+  booktitle = {Proceedings of the 41st International Conference on Machine Learning},
+  pages = {5209--5235},
+  publisher = {PMLR},
   year = {2024},
-  howpublished = {[Online]},
-  note = {Available: \url{https://arxiv.org/abs/2401.10774}.}
+  note = {Available: \url{https://proceedings.mlr.press/v235/cai24b.html}.}
 }
 
-@misc{li2024eagle2,
+@inproceedings{li2024eagle2,
   author = {Yuhui Li and Fangyun Wei and Chao Zhang and Hongyang Zhang},
   title = {{EAGLE-2}: Faster Inference of Language Models with Dynamic Draft Trees},
+  booktitle = {Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing},
+  pages = {7421--7432},
+  publisher = {Association for Computational Linguistics},
   year = {2024},
-  howpublished = {[Online]},
-  note = {Available: \url{https://arxiv.org/abs/2406.16858}.}
+  note = {Available: \url{https://doi.org/10.18653/v1/2024.emnlp-main.422}.}
 }
 
-@misc{li2025eagle3,
+@inproceedings{li2025eagle3,
   author = {Yuhui Li and Fangyun Wei and Chao Zhang and Hongyang Zhang},
   title = {{EAGLE-3}: Scaling up Inference Acceleration of Large Language Models via Training-Time Test},
+  booktitle = {Advances in Neural Information Processing Systems},
+  volume = {38},
+  pages = {136737--136756},
+  publisher = {Curran Associates, Inc.},
   year = {2025},
-  howpublished = {[Online]},
   note = {Available: \url{https://arxiv.org/abs/2503.01840}.}
 }
 
-@misc{li2024eagle,
+@inproceedings{li2024eagle,
   author = {Yuhui Li and Fangyun Wei and Chao Zhang and Hongyang Zhang},
   title = {{EAGLE}: Speculative Sampling Requires Rethinking Feature Uncertainty},
+  booktitle = {Proceedings of the 41st International Conference on Machine Learning},
+  pages = {28935--28948},
+  publisher = {PMLR},
   year = {2024},
-  howpublished = {[Online]},
-  note = {Available: \url{https://arxiv.org/abs/2401.15077}.}
+  note = {Available: \url{https://proceedings.mlr.press/v235/li24bt.html}.}
 }
 
-@misc{zheng2023judging,
+@inproceedings{zheng2023judging,
   author = {Lianmin Zheng and Wei-Lin Chiang and Ying Sheng and Siyuan Zhuang and Zhanghao Wu and Yonghao Zhuang and Zi Lin and Zhuohan Li and Dacheng Li and Eric P. Xing and Hao Zhang and Joseph E. Gonzalez and Ion Stoica},
   title = {Judging {LLM-as-a-Judge} with {MT-Bench} and Chatbot Arena},
+  booktitle = {Advances in Neural Information Processing Systems},
+  volume = {36},
+  pages = {46595--46623},
+  publisher = {Curran Associates, Inc.},
   year = {2023},
-  howpublished = {[Online]},
   note = {Available: \url{https://arxiv.org/abs/2306.05685}.}
 }
 
@@ -140,6 +169,7 @@
 @misc{hfeaglevicuna,
   author = {{Yuhui Li}},
   title = {{EAGLE-Vicuna-7B-v1.3}},
+  year = {2023},
   howpublished = {[Online]},
   note = {Available: \url{https://huggingface.co/yuhuili/EAGLE-Vicuna-7B-v1.3}.}
 }
@@ -147,6 +177,7 @@
 @misc{hfmedusavicuna,
   author = {{FasterDecoding}},
   title = {{medusa-vicuna-7b-v1.3}},
+  year = {2023},
   howpublished = {[Online]},
   note = {Available: \url{https://huggingface.co/FasterDecoding/medusa-vicuna-7b-v1.3}.}
 }
@@ -180,11 +211,12 @@
   note = {Available: \url{https://huggingface.co/datasets/openai/gdpval}}
 }
 
-@misc{gsm8k,
-  author = {{OpenAI}},
-  title = {{GSM8K} Dataset},
+@misc{cobbe2021gsm8k,
+  author = {Karl Cobbe and Vineet Kosaraju and Mohammad Bavarian and Mark Chen and Heewoo Jun and Lukasz Kaiser and Matthias Plappert and Jerry Tworek and Jacob Hilton and Reiichiro Nakano and Christopher Hesse and John Schulman},
+  title = {Training Verifiers to Solve Math Word Problems},
+  year = {2021},
   howpublished = {[Online]},
-  note = {Available: \url{https://huggingface.co/datasets/openai/gsm8k}}
+  note = {{D}ataset available: \url{https://huggingface.co/datasets/openai/gsm8k}. Available: \url{https://arxiv.org/abs/2110.14168}.}
 }
 
 % ------------------------------------------------------------------------

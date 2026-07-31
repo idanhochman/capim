@@ -135,19 +135,44 @@ CAPIM reaches 1.45×--2.00× LP-Spec's best simulated energy efficiency and 1.09
 }
 
 % ---- Acronyms ----
-\nomenclature[a-LLM]{LLM}{Large Language Model}
-\nomenclature[a-PIM]{PIM}{Processing-In-Memory}
-\nomenclature[a-SRAM]{SRAM}{Static Random Access Memory}
+\nomenclature[a-ALU]{ALU}{Arithmetic Logic Unit}
+\nomenclature[a-CPU]{CPU}{Central Processing Unit}
+\nomenclature[a-DMA]{DMA}{Direct Memory Access}
 \nomenclature[a-DRAM]{DRAM}{Dynamic Random Access Memory}
-\nomenclature[a-NVM]{NVM}{Non-volatile Memory}
-\nomenclature[a-NPU]{NPU}{Neural Processing Unit}
+\nomenclature[a-EDP]{EDP}{Energy-Delay Product}
+\nomenclature[a-FC]{FC}{Fully-Connected}
+\nomenclature[a-GEMM]{GEMM}{General Matrix Multiplication}
 \nomenclature[a-GPU]{GPU}{Graphics Processing Unit}
-\nomenclature[a-TPU]{TPU}{Tensor Processing Unit}
+\nomenclature[a-HBM]{HBM}{High Bandwidth Memory}
+\nomenclature[a-LLM]{LLM}{Large Language Model}
 \nomenclature[a-LPDDR]{LPDDR}{Low-power Double Data Rate}
+\nomenclature[a-MAC]{MAC}{Multiply-Accumulate}
+\nomenclature[a-NPU]{NPU}{Neural Processing Unit}
+\nomenclature[a-PIM]{PIM}{Processing-in-Memory}
+\nomenclature[a-PNM]{PNM}{Processing-Near-Memory}
+\nomenclature[a-PUM]{PUM}{Processing-Using-Memory}
+\nomenclature[a-QKV]{QKV}{Query, Key and Value}
+\nomenclature[a-SIMD]{SIMD}{Single Instruction, Multiple Data}
+\nomenclature[a-SRAM]{SRAM}{Static Random Access Memory}
 
 % ---- Notation ----
-\nomenclature[b-sigma]{$\sigma_{th}$}{Model confidence score threshold}
-\nomenclature[b-mu]{$\mu_{th}$}{Candidate token tree size threshold}
+% Each symbol is written exactly as the body renders it: text mode where the body
+% uses text mode, math mode where the body uses math mode.
+\nomenclature[b-01]{σ\textsubscript{th}}{Model confidence score threshold}
+\nomenclature[b-02]{μ}{Draft tree size, in surviving nodes}
+\nomenclature[b-03]{μ\textsubscript{th}}{Candidate token tree size threshold}
+\nomenclature[b-04]{L\textsubscript{spec}}{LP-Spec's speculation length, in retained candidate tokens}
+\nomenclature[b-05]{$t_{\text{layer}}$}{Latency of a typed layer}
+\nomenclature[b-06]{$c_{\text{layer}}$}{Operation count of a typed layer}
+\nomenclature[b-07]{$b_{\text{layer}}$}{Bytes a typed layer must move}
+\nomenclature[b-08]{$\Pi_{\text{device}}$}{Peak compute throughput of a device}
+\nomenclature[b-09]{$B_{\text{device}}$}{Relevant bandwidth of a device}
+\nomenclature[b-10]{$N_{\text{ALU}}$}{Near-bank ALUs per PIM compute unit, and hence nodes verified per pass}
+\nomenclature[b-11]{$t_n$}{Time the NPU alone would take on an undivided kernel}
+\nomenclature[b-12]{$t_p$}{Time PIM alone would take on an undivided kernel}
+\nomenclature[b-13]{$r$}{Fraction of a kernel's output columns routed to the NPU}
+\nomenclature[b-14]{$t_{\text{kernel}}$}{Makespan of a column-split kernel}
+\nomenclature[b-15]{$K$}{Number of tokens generated during decoding}
 
 \printnomenclature
 
@@ -172,9 +197,9 @@ I would like to thank Dr. Haiyu Mao for supervising this project. Her guidance a
 \subsection{Background}
 Large Language Models (LLMs) have become highly successful and widely adopted, yet they are still run predominantly in the cloud, with mobile and edge devices acting as thin clients that send each request to a remote server. Performing inference on the device itself would instead keep user data local, remove the network delay and jitter of a cloud round-trip, and preserve service availability without a connection. These benefits are difficult to attain in practice, because a mobile platform offers only a fraction of the memory bandwidth, compute, and energy of a data-centre server. Delivering on-device inference within those limits calls for new architectural approaches rather than scaled-down server designs.
 
-The binding constraint is not the arithmetic but the movement of data. To generate a token, the model must stream its full set of weights out of memory, and in a conventional processor-centric system it is this movement across the off-chip interface, rather than the computation performed once the data arrives, that dominates both energy and latency. The imbalance is most severe at the edge: when large neural-network models run on modern edge accelerators, more than 90\% of the total system energy is spent on memory rather than on computation~\cite{mutlu2025primer}. On a device drawing from a fixed battery, energy efficiency is therefore the primary objective, and reducing data movement is the most direct means of improving it.
+The binding constraint is not the arithmetic but the movement of data. To generate a token, the model must stream its full set of weights out of memory, and in a conventional processor-centric system it is this movement across the off-chip interface, rather than the computation performed once the data arrives, that dominates both energy and latency. The imbalance is most severe at the edge: when large neural-network models run on modern edge accelerators, more than 90\% of the total system energy is spent on memory rather than on computation~\cite{mutlu2022primer}. On a device drawing from a fixed battery, energy efficiency is therefore the primary objective, and reducing data movement is the most direct means of improving it.
 
-Processing-In-Memory (PIM) attacks this bottleneck at its source. It is a data-centric paradigm that places compute units directly inside or near the memory arrays, so that the weights are processed where they already reside instead of being moved to a central processor across an external bus~\cite{mutlu2025primer}. By removing that movement, it directly attacks the cost that dominates energy on a battery-constrained device.
+Processing-in-Memory (PIM) attacks this bottleneck at its source. It is a data-centric paradigm that places compute units directly inside or near the memory arrays, so that the weights are processed where they already reside instead of being moved to a central processor across an external bus~\cite{mutlu2022primer}. By removing that movement, it directly attacks the cost that dominates energy on a battery-constrained device.
 
 Speculative decoding addresses a second and complementary constraint: the latency of the sequential decoding stage. An LLM generates its output one token at a time, each conditioned on all tokens before it, so decoding is inherently serial. Parallelism can be achieved by batching many independent user requests and decoding them together, but this requires a supply of concurrent requests; an on-device system serves a single user stream and is restricted to a batch size of one, where batching offers nothing. Speculative decoding instead extracts parallelism from that single stream by cheaply drafting several candidate tokens and verifying them together in one pass~\cite{leviathan2023speculative}, making it the primary means of accelerating decoding on the device.
 
@@ -190,7 +215,7 @@ Pruning is not the only decision such an architecture makes at run-time; it must
 \subsection{Proposed solution}
 This project proposes CAPIM, a confidence-aware PIM-based architecture for LLM inference on mobile devices that natively integrates EAGLE-2. Its central mechanism is a confidence gate: during drafting, the architecture tracks each branch's accumulated confidence and terminates the branch once that confidence falls below a configurable threshold. This gate is CAPIM's pruning stage, replacing LP-Spec's retrospective pruner with one driven by the live confidence signal. Because a branch is stopped as soon as its confidence runs out, the size of the tree follows the context -- large when the model is confident, small when it is uncertain.
 
-The size of the pruned tree in turn informs where verification runs, between the PIM units and the NPU, against a second threshold. This threshold is not a fixed, latency-driven split but a run-time control the device can sets according to its battery and thermal state. When the tree is small, verification stays resident in the PIM units and avoids the off-chip weight traffic that dominates energy; a higher-performance setting instead splits the work onto the NPU for speed. The energy-latency trade-off is thereby exposed as a run-time choice, rather than fixed to latency as in LP-Spec's allocation unit.
+The size of the pruned tree in turn informs where verification runs, between the PIM units and the NPU, against a second threshold. This threshold is not a fixed, latency-driven split but a run-time control the device can set according to its battery and thermal state. When the tree is small, verification stays resident in the PIM units and avoids the off-chip weight traffic that dominates energy; a higher-performance setting instead splits the work onto the NPU for speed. The energy-latency trade-off is thereby exposed as a run-time choice, rather than fixed to latency as in LP-Spec's allocation unit.
 
 CAPIM is evaluated by architectural simulation against LP-Spec and a plain autoregressive baseline, all priced on a shared cost model so that any difference reflects the designs and not how they were measured. CAPIM improves energy efficiency over the LP-Spec baseline while also improving decoding latency, with the full results presented in Chapter 5.
 
@@ -202,11 +227,11 @@ The rest of this report is organized as follows. Chapter 2 reviews the relevant 
 \section{Literature Review}
 
 \subsection{Processing-in-memory (PIM)}
-PIM is a data-centric computing paradigm designed to overcome the performance and energy bottlenecks of traditional processor-centric systems. The core principle of PIM is placing computation mechanisms directly inside or near where data is stored, rather than moving data to a central processor, like traditional computer architectures. Data movement is a key bottleneck for data-intensive domains, such as machine learning and genome analysis, in terms of energy and latency costs. PIM architectures aim to mitigate those costs by eliminating the need for data movement~\cite{mutlu2025primer}.
+PIM is a data-centric computing paradigm designed to overcome the performance and energy bottlenecks of traditional processor-centric systems. The core principle of PIM is placing computation mechanisms directly inside or near where data is stored, rather than moving data to a central processor, like traditional computer architectures. Data movement is a key bottleneck for data-intensive domains, such as machine learning and genome analysis, in terms of energy and latency costs. PIM architectures aim to mitigate those costs by eliminating the need for data movement~\cite{mutlu2022primer}.
 
-This bottleneck is structural and worsening. Conventional systems are processor-centric: they are designed to move data to computation, yet the cost of moving data, especially between off-chip memory and the on-chip processor, far exceeds the cost of the computation itself in terms of energy, latency and bandwidth. The imbalance is a direct consequence of technology scaling. Between 1999 and 2017, DRAM capacity improved by roughly 128×, but memory bandwidth improved by only about 20×, while memory latency remained nearly constant, improving by only around 30\% over two decades~\cite{mutlu2025primer}. The resulting ``memory wall'' is especially punishing for mobile and edge workloads, where data movement dominates the energy budget. For widely-used mobile consumer workloads, more than 62\% of the total system energy of a mobile device is spent on data movement between the processor and the memory hierarchy, and for large commercial edge neural-network models running on modern edge accelerators, more than 90\% of the system energy is consumed by memory~\cite{mutlu2025primer}. On-device LLM inference is an even more memory-intensive instance of this same problem, as it is dominated by a sequential, memory-bound decoding stage. This makes reducing data movement, rather than accelerating computation, the primary lever for energy efficiency in battery-constrained deployment.
+This bottleneck is structural and worsening. Conventional systems are processor-centric: they are designed to move data to computation, yet the cost of moving data, especially between off-chip memory and the on-chip processor, far exceeds the cost of the computation itself in terms of energy, latency and bandwidth. The imbalance is a direct consequence of technology scaling. Between 1999 and 2017, DRAM capacity improved by roughly 128×, but memory bandwidth improved by only about 20×, while memory latency remained nearly constant, improving by only around 30\% over two decades~\cite{mutlu2022primer}. The resulting ``memory wall'' is especially punishing for mobile and edge workloads, where data movement dominates the energy budget. For widely-used mobile consumer workloads, more than 62\% of the total system energy of a mobile device is spent on data movement between the processor and the memory hierarchy, and for large commercial edge neural-network models running on modern edge accelerators, more than 90\% of the system energy is consumed by memory~\cite{mutlu2022primer}. On-device LLM inference is an even more memory-intensive instance of this same problem, as it is dominated by a sequential, memory-bound decoding stage. This makes reducing data movement, rather than accelerating computation, the primary lever for energy efficiency in battery-constrained deployment.
 
-PIM designs fall into two broad categories~\cite{mutlu2025primer}. Processing-Using-Memory (PUM) exploits the analog operational principles of the memory circuitry itself to perform massively parallel operations in situ, such as bulk copy, bitwise Boolean logic and simple arithmetic within the memory arrays. Processing-Near-Memory (PNM) instead adds explicit compute logic, such as accelerators, simple cores or reconfigurable units, close to the memory arrays, for example in the logic layer of a 3D-stacked device or near individual DRAM banks. PNM provides high-bandwidth, low-energy and low-latency access to data while retaining a conventional programmable compute model. The architectures relevant to this project, including PAPI and LP-Spec (discussed below) as well as the proposed CAPIM, are all near-bank PNM designs.
+PIM designs fall into two broad categories~\cite{mutlu2022primer}. Processing-Using-Memory (PUM) exploits the analog operational principles of the memory circuitry itself to perform massively parallel operations in situ, such as bulk copy, bitwise Boolean logic and simple arithmetic within the memory arrays. Processing-Near-Memory (PNM) instead adds explicit compute logic, such as accelerators, simple cores or reconfigurable units, close to the memory arrays, for example in the logic layer of a 3D-stacked device or near individual DRAM banks. PNM provides high-bandwidth, low-energy and low-latency access to data while retaining a conventional programmable compute model. The architectures relevant to this project, including PAPI and LP-Spec (discussed below) as well as the proposed CAPIM, are all near-bank PNM designs.
 
 \subsection{LLM inference}
 Modern LLMs are built from a stack of transformer decoder blocks. Each block comprises four principal kernels: QKV (query, key, and value) generation, multi-head attention, projection, and a feedforward network. Text is generated autoregressively: the model emits one token at a time, and each new token is conditioned on the entire sequence produced so far. To avoid recomputing the attention keys and values for the whole sequence at every iteration, the K and V matrices are cached once produced and reused across all subsequent iterations, a mechanism known as the KV-cache~\cite{he2025papi}.
@@ -287,7 +312,7 @@ To execute verification, LP-Spec partitions the workload between the NPU and the
 \subsection{Motivation}
 LLMs have achieved tremendous success across a variety of domains, and there is growing demand to run them directly on mobile and edge devices rather than in the cloud. On-device execution keeps user data local, avoids the network delay and jitter incurred by cloud round-trips, and preserves service availability without depending on a connection. However, deploying LLMs at the edge remains fundamentally constrained: a model must stream its full set of weights from memory for every token it generates, and edge platforms offer only a fraction of the memory bandwidth and energy budget available in the data centre~\cite{chen2026edge}.
 
-These constraints make efficient on-device inference an acute and increasingly studied problem. The first of them is energy. A mobile device draws from a fixed battery that must simultaneously serve the display, connectivity, and the everyday applications for which the device is primarily used, and opportunities to recharge are infrequent; inference therefore competes for an energy budget it does not own. That budget is exhausted quickly: under continuous inference with a 4-bit quantized 3B model, a smartphone's battery is estimated to be depleted after roughly 490--590 prompts~\cite{laskaridis2024melting}. Crucially, that energy is not spent where one might expect. In a processor-centric system, the weights are stored in memory and must be brought to the compute units before they can be used, and it is this movement, rather than the arithmetic performed once the data arrives, that dominates. When large commercial neural-network models are executed on modern edge machine learning accelerators, more than 90\% of the entire system energy is consumed by memory rather than by computation~\cite{mutlu2025primer}. For this class of workload, energy efficiency, rather than peak compute, is therefore the primary objective, and reducing data movement is the most direct means of improving it. This is precisely what PIM offers: by placing compute units next to the DRAM banks, weights are processed where they reside instead of being moved across an external bus.
+These constraints make efficient on-device inference an acute and increasingly studied problem. The first of them is energy. A mobile device draws from a fixed battery that must simultaneously serve the display, connectivity, and the everyday applications for which the device is primarily used, and opportunities to recharge are infrequent; inference therefore competes for an energy budget it does not own. That budget is exhausted quickly: under continuous inference with a 4-bit quantized 3B model, a smartphone's battery is estimated to be depleted after roughly 490--590 prompts~\cite{laskaridis2024melting}. Crucially, that energy is not spent where one might expect. In a processor-centric system, the weights are stored in memory and must be brought to the compute units before they can be used, and it is this movement, rather than the arithmetic performed once the data arrives, that dominates. When large commercial neural-network models are executed on modern edge machine learning accelerators, more than 90\% of the entire system energy is consumed by memory rather than by computation~\cite{mutlu2022primer}. For this class of workload, energy efficiency, rather than peak compute, is therefore the primary objective, and reducing data movement is the most direct means of improving it. This is precisely what PIM offers: by placing compute units next to the DRAM banks, weights are processed where they reside instead of being moved across an external bus.
 
 The second constraint is speed. An LLM generates its output sequentially, one token at a time, and in a processor-centric system each of these tokens requires the model's full set of weights to be moved across the off-chip interface. Commodity edge hardware provides only tens of GB/s for this transfer, far below that of server accelerators~\cite{chen2025elib}. In the data centre, this cost is amortized by batching: a single fetch of the weights serves many sequences at once. On-device inference, however, serves a single user stream and is therefore restricted to a batch size of one. This leaves speculative decoding as the primary source of parallelism, which attacks decoding latency by drafting several candidate tokens and verifying them in parallel.
 
@@ -354,7 +379,7 @@ The confidence gate is a per-node check performed as EAGLE-2's draft head produc
 
 CAPIM does not need a new signal for the gate, because building an EAGLE-2 tree already produces one. Section~\ref{subsec:sd} described how EAGLE-2 reranks candidates at each expansion step by their cumulative confidence, the running score accumulated along the path from root to node; σ\textsubscript{th} is compared against that same accumulated score. What EAGLE-2 does with that number is not what CAPIM does with it. EAGLE-2's tree is a fixed size, its draft-token budget and depth set in advance, so reranking only ever decides which of that fixed budget's candidates are expanded first -- a relative judgement, comparing candidates only against each other. σ\textsubscript{th} instead makes the tree's size depend on the draft itself, judging a branch on its own, with nothing else to compare it against, and stopping it once its score falls too low to continue -- an absolute judgement, and the one thing EAGLE-2's own reranking never makes. Whether the accumulated score is calibrated well enough to support that judgement is tested empirically, by the method in Section~\ref{sec:characterization} and the result in Section~\ref{sec:pruning}.
 
-Answering that judgement is nonetheless cheap to build, for three reasons intrinsic to the score itself. First, extending a path by one more token can only ever add that token's own log-probability, which is never positive; a node's cumulative score can therefore only fall or hold as the path grows, never rise, making it monotonically non-increasing with depth. Second, this makes the surviving set ancestor-closed without any extra bookkeeping, because a node's score is always at most its parent's, so a node cannot clear σ\textsubscript{th} unless its parent did too, and the nodes kept at any depth are automatically connected back to the root. Third, the check itself needs no memory of the path. Since ancestor-closure is guaranteed by construction, a node's survival depends only on its own score and whether its immediate parent survived, not on re-examining every ancestor in turn. A single running comparator per branch is therefore enough; nothing about the gate requires propagating a pass or fail result back up or down the tree once it is computed.
+Answering that judgement is nonetheless cheap to build, for three reasons intrinsic to the score itself. First, extending a path by one more token can only ever add that token's own log-probability, which is never positive; a node's cumulative score can therefore only fall or hold as the path grows, never rise, making it monotonically non-increasing with depth. Second, this makes the surviving set ancestor-closed without any extra bookkeeping, because a node's score is always at most its parent's.Consequently, a node cannot clear σ\textsubscript{th} unless its parent did too, ensuring that the nodes kept at any depth are automatically connected back to the root. Third, the check itself needs no memory of the path. Since ancestor-closure is guaranteed by construction, a node's survival depends only on its own score and whether its immediate parent survived, not on re-examining every ancestor in turn. A single running comparator per branch is therefore enough; nothing about the gate requires propagating a pass or fail result back up or down the tree once it is computed.
 
 \subsection{Tree size-based routing}
 \label{sec:routing}
@@ -397,6 +422,8 @@ The second stage records how each architecture decodes once its own pruning is g
 
 The third stage turns those traces into latency and energy figures. A single analytical cost model prices the individual layers of a transformer, and each architecture -- autoregressive decoding, LP-Spec, and CAPIM -- is expressed as a thin driver that emits its layers and composes them according to its own execution model. Because all three are priced by the same model, any difference in their results comes from the designs themselves and not from how each was costed. One quantity is still open when a trace reaches this stage. μ\textsubscript{th}, the routing threshold, decides where each verification pass runs without altering what the trace recorded, so it is swept as each trace is priced -- σ\textsubscript{th} and L\textsubscript{spec} having already been swept during collection. Both thresholds are configuration registers the controller reads at run time, so the evaluation reports the range each can take rather than fixing one setting as the design. The model itself, and the hardware it represents, are given in Section~\ref{sec:costmodel}.
 
+he implementation of all three stages -- the instrumented collectors, the shared cost model and its three drivers, and the scripts that generate every table and figure in this report -- is available at \url{https://github.com/idanhochman/capim}.
+
 \subsection{Collecting and pruning draft trees}
 \label{sec:characterization}
 This section sets out how the draft trees were logged, and how each method's pruning was applied inside the decoding loop that produced them. Two methods are instrumented, EAGLE-2 for CAPIM and MEDUSA for the LP-Spec baseline, and the instrumentation takes the same form in each. Functions inside the decoding loop are wrapped so their inputs and outputs can be read as the model runs. What those wrappers see is logged as one entry per drafted node, giving that node's position in the tree, its cumulative confidence score where the method computes one, and whether the target model accepted or rejected it at verification. The same wrappers produce both kinds of trace the evaluation needs, run either with a pruning threshold active or without one. Those traces are what the analysis of EAGLE-2's drafting behaviour rests on, and what drives the cost model for CAPIM and for both baselines. What is wrapped in each, and how it behaves in either mode, is set out below.
@@ -414,7 +441,7 @@ A typed layer's latency follows a per-layer roofline, the same form on either de
 t_{\text{layer}} = \max\!\left( \frac{c_{\text{layer}}}{\Pi_{\text{device}}},\ \frac{b_{\text{layer}}}{B_{\text{device}}} \right)
 \label{eq:roofline}
 \end{equation}
-where $c_{\text{layer}}$ is the layer's operation count and $\Pi_{\text{device}}$ the device's peak compute throughput, $b_{\text{layer}}$ the bytes it must move and $B_{\text{device}}$ the relevant bandwidth -- PIM's internal bank bandwidth for a kernel it runs and the shared external bus for the NPU. A layer is compute-bound or memory-bound according to which term of Equation~\ref{eq:roofline} wins. PIM's compute term carries one further subtlety. Its near-bank ALUs are token-parallel, so a single pass over the weights verifies up to $N_{\text{ALU}}$ nodes at once, and the term therefore rounds a tree of $m$ nodes up to the next multiple of $N_{\text{ALU}}$ and counts whole passes. This organisation is part of the PIM substrate LP-Spec proposed, adopted here unchanged, since CAPIM's contribution is the confidence-driven control above it rather than the memory microarchitecture beneath.
+where $c_{\text{layer}}$ is the layer's operation count and $\Pi_{\text{device}}$ the device's peak compute throughput, $b_{\text{layer}}$ the bytes it must move and $B_{\text{device}}$ the relevant bandwidth -- PIM's internal bank bandwidth for a kernel it runs and the shared external bus for the NPU. A layer is compute-bound or memory-bound according to which term of Equation~\ref{eq:roofline} wins. PIM's compute term carries one further subtlety. Its near-bank ALUs are token-parallel, so a single pass over the weights verifies up to $N_{\text{ALU}}$ nodes at once, and the term therefore rounds a tree of μ nodes up to the next multiple of $N_{\text{ALU}}$ and counts whole passes. This organisation is part of the PIM substrate LP-Spec proposed, adopted here unchanged, since CAPIM's contribution is the confidence-driven control above it rather than the memory microarchitecture beneath.
 
 A layer's energy comes from two sources, the bits it moves and the operations it performs. The first is charged at a fixed cost per bit for the interface crossed, the second at a fixed cost per operation. Both figures are taken from published sources rather than produced by a simulator. This mirrors LP-Spec, which models performance analytically and draws its energy from prior work~\cite{he2025lpspec}. It is in any case the only option available. No public simulator accurately models commercial LPDDR5-PIM, the existing ones being limited to generic HBM or DDR memory~\cite{cha2026lp5x}.
 
@@ -474,7 +501,7 @@ Before any result is shown, this section fixes what is being measured and how th
 
 Three quantities recur throughout the chapter. Throughput is decoding speed, in tokens returned per second of wall-clock decoding. Energy efficiency is tokens returned per joule spent generating them. The two are reported together with energy-delay product (EDP, in seconds times millijoules), a single figure that falls when a design is both faster and more efficient and rises when it is not. Each is reported as one ratio over a whole dataset, formed by summing the tokens, the seconds and the joules of every decoding iteration of every prompt and taking the ratio of those totals.
 
-Every number in this chapter comes from traces recorded once. The draft-tree behaviour reported in Section~\ref{sec:pruning} is read from those recordings directly, while every latency and energy figure is obtained by replaying them through the cost model. The target model and both drafting mechanisms -- EAGLE-2 for CAPIM, MEDUSA for LP-Spec -- use checkpoints released by their own original authors. Vicuna-7B-v1.3~\cite{zheng2023judging}, a LLaMA fine-tune, is the target model, and it is the only 7B backbone for which both EAGLE-2 and MEDUSA publish an official head, so CAPIM and LP-Spec can be evaluated on one identical backbone rather than on two different target models. This departs from LP-Spec's paper, which evaluates LLaMA-2-7B. The departure costs little, since the two models share the same layer structure and the same dimensions, and that is all the cost model reads. CAPIM's drafting is provided by EAGLE-2's official head for this target, \nolinkurl{yuhuili/EAGLE-Vicuna-7B-v1.3}~\cite{li2024eagle,li2024eagle2,hfeaglevicuna}; LP-Spec's drafting is provided by MEDUSA's official extra decoding heads for this target, \nolinkurl{FasterDecoding/medusa-vicuna-7b-v1.3}~\cite{cai2024medusa,hfmedusavicuna}. Collection drew a subset of 100 prompts from Alpaca~\cite{taori2023alpaca} and a subset of 100 prompts from GSM8K~\cite{gsm8k}, and both drafting mechanisms were run over the identical subset of each. Two kinds of trace were recorded for each mechanism. An ungated trace submits every drafted node genuinely to the target, logging its confidence score, tree position and accept/reject outcome. A gated trace, one per threshold this chapter sweeps, is instead collected with that threshold applied live inside the decoding loop, so a pruned node changes the model's actual continuation rather than being discarded after the fact. Collection itself ran on two Kaggle-hosted NVIDIA T4 GPUs; nothing past that point needs a GPU at all, since the cost model in this chapter runs on a CPU.
+Every number in this chapter comes from traces recorded once. The draft-tree behaviour reported in Section~\ref{sec:pruning} is read from those recordings directly, while every latency and energy figure is obtained by replaying them through the cost model. The target model and both drafting mechanisms -- EAGLE-2 for CAPIM, MEDUSA for LP-Spec -- use checkpoints released by their own original authors. Vicuna-7B-v1.3~\cite{zheng2023judging}, a LLaMA fine-tune, is the target model, and it is the only 7B backbone for which both EAGLE-2 and MEDUSA publish an official head, so CAPIM and LP-Spec can be evaluated on one identical backbone rather than on two different target models. This departs from LP-Spec's paper, which evaluates LLaMA-2-7B. The departure costs little, since the two models share the same layer structure and the same dimensions, and that is all the cost model reads. CAPIM's drafting is provided by EAGLE-2's official head for this target, \nolinkurl{yuhuili/EAGLE-Vicuna-7B-v1.3}~\cite{li2024eagle,li2024eagle2,hfeaglevicuna}; LP-Spec's drafting is provided by MEDUSA's official extra decoding heads for this target, \nolinkurl{FasterDecoding/medusa-vicuna-7b-v1.3}~\cite{cai2024medusa,hfmedusavicuna}. Collection drew a subset of 100 prompts from Alpaca~\cite{taori2023alpaca} and a subset of 100 prompts from GSM8K~\cite{cobbe2021gsm8k}, and both drafting mechanisms were run over the identical subset of each. Two kinds of trace were recorded for each mechanism. An ungated trace submits every drafted node genuinely to the target, logging its confidence score, tree position and accept/reject outcome. A gated trace, one per threshold this chapter sweeps, is instead collected with that threshold applied live inside the decoding loop, so a pruned node changes the model's actual continuation rather than being discarded after the fact. Collection itself ran on two Kaggle-hosted NVIDIA T4 GPUs; nothing past that point needs a GPU at all, since the cost model in this chapter runs on a CPU.
 
 \subsection{EAGLE-2 draft tree behaviour under a confidence gate}
 \label{sec:pruning}
@@ -508,9 +535,28 @@ The LP-Spec baseline is a reconstruction, for the reason Section~\ref{sec:approa
 
 One quantity in the reconstruction cannot be recovered from the paper. LP-Spec's speculation length (L\textsubscript{spec}) is not a configuration value that can be set: it is produced at run-time by the Draft Token Pruner, which grows the tree node by node and stops on a combined performance and energy objective~\cite{he2025lpspec}. The paper does not specify that objective in enough detail to reproduce, so the sequence of tree sizes it would have produced cannot be regenerated. The reconstruction instead takes a fixed tree size as an input, standing for the run-average speculation length, and sweeps it over a range of settings.
 
-Figure~\ref{fig:validation} shows that sweep against the two figures LP-Spec reports for itself, with the cost model driven by Alpaca traces to match the dataset LP-Spec reports those figures on. At their closest the swept sizes reproduce LP-Spec's reported energy efficiency to 0.98× and its throughput to 1.02×. An exact match was neither achieved nor expected. The reconstruction sweeps a fixed tree size in place of a run-average it cannot recover, so it yields a range rather than a single operating point. What the check asks is whether that range lands close to the reported system, and it does, to within a few percent on both of the axes LP-Spec reports.
+Table~\ref{tab:lsweep} gives that sweep. Figure~\ref{fig:validation} places it against the two figures LP-Spec reports for itself, with the cost model driven by Alpaca traces to match the dataset LP-Spec reports those figures on. At their closest the swept sizes reproduce LP-Spec's reported energy efficiency to 0.98× and its throughput to 1.02×. An exact match was neither achieved nor expected. The reconstruction sweeps a fixed tree size in place of a run-average it cannot recover, so it yields a range rather than a single operating point. What the check asks is whether that range lands close to the reported system, and it does, to within a few percent on both of the axes LP-Spec reports.
 
 On that basis the cost model is accepted as the instrument for the remainder of the chapter. LP-Spec accordingly enters the comparison of Section~\ref{sec:headline} not as a single quoted pair of numbers but as a modelled system swept across tree size, and CAPIM is held against the strongest point of that sweep -- a point that matches LP-Spec's published energy efficiency and exceeds its published throughput.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{ccc}
+\toprule
+L\textsubscript{spec} & Throughput (token/s) & Energy efficiency (token/J) \\
+\midrule
+2 & 116.2 & 31.4 \\
+4 & 126.9 & 31.9 \\
+8 & 74.8 & 24.5 \\
+12 & 58 & 21 \\
+16 & 48.2 & 18.3 \\
+64 & 25 & 8.9 \\
+\bottomrule
+\end{tabular}
+\caption{The reconstructed LP-Spec baseline swept across L\textsubscript{spec}, Alpaca.}
+\label{tab:lsweep}
+\end{table}
 
 \begin{figure}[H]
 \centering
@@ -523,7 +569,7 @@ On that basis the cost model is accepted as the instrument for the remainder of 
 \subsection{Exploring the confidence–routing threshold trade-off}
 \label{sec:tradeoff}
 
-Two thresholds govern CAPIM, and neither has been given a value. Section~\ref{sec:pruning} established what a confidence gate does to the draft tree, measured against the drafting algorithm and the workload alone. The routing threshold has not been exercised at all. Both are taken up here, on the two axes a battery-powered device is judged on, by sweeping them jointly through the cost model that Section~\ref{sec:validation} accepted.
+Two thresholds govern CAPIM, and neither has been given a value. Section~\ref{sec:pruning} established what a confidence gate does to the draft tree, measured against the drafting algorithm and the workload alone. The routing threshold has not been exercised at all. Both are taken up here, on the two axes upon which battery-powered device is judged , by sweeping them jointly through the cost model that Section~\ref{sec:validation} accepted.
 
 The two thresholds are not the same kind of quantity. σ\textsubscript{th} changes what is computed: it decides how many of the 59 drafted nodes reach the verification pass, and its effect on the tree was measured in Section~\ref{sec:pruning} without reference to any hardware. μ\textsubscript{th} changes where that work is computed: every surviving tree is measured against it, and a tree smaller than the threshold has its verification pass offloaded to PIM as far as the near-bank datapath allows, while a tree larger than it has its FC kernels column-split between PIM and the NPU (Section~\ref{sec:routing}); attention stays PIM-resident in both routes. The nonlinear operations are handed to the NPU in both cases, so neither route runs on PIM alone. One threshold removes work and the other routes it.
 
@@ -544,17 +590,17 @@ Table~\ref{tab:surface} gives the sweep in full, and Figure~\ref{fig:surface_alp
 \midrule
 \multicolumn{8}{l}{\emph{Alpaca}} \\
 −0.5 & 151.0 / 43.9 & 144.6 / 51.7 & 141.7 / 56.5 & 138.4 / 60.6 & 138.4 / 60.6 & 138.4 / 60.6 & 138.4 / 60.6 \\
-−1 & 153.0 / 46.2 & 149.6 / 50.3 & 146.2 / 55.3 & 139.1 / 63.6 & 138.9 / 63.8 & 138.8 / 63.8 & 138.8 / 63.8 \\
+−1 & 153 / 46.2 & 149.6 / 50.3 & 146.2 / 55.3 & 139.1 / 63.6 & 138.9 / 63.8 & 138.8 / 63.8 & 138.8 / 63.8 \\
 −1.5 & 142.1 / 45.8 & 140.9 / 47.3 & 138.8 / 50.4 & 128.6 / 61.8 & 126.4 / 64.3 & 126.2 / 64.4 & 126.2 / 64.4 \\
-−2 & 123.6 / 42.9 & 123.3 / 43.3 & 122.6 / 44.4 & 114.4 / 53.0 & 107.7 / 60.7 & 106.4 / 62.1 & 106.3 / 62.2 \\
-−2.5 & 103.2 / 38.4 & 103.1 / 38.5 & 103.0 / 38.7 & 99.8 / 41.8 & 91.6 / 49.6 & 86.1 / 55.8 & 84.2 / 58.0 \\
+−2 & 123.6 / 42.9 & 123.3 / 43.3 & 122.6 / 44.4 & 114.4 / 53 & 107.7 / 60.7 & 106.4 / 62.1 & 106.3 / 62.2 \\
+−2.5 & 103.2 / 38.4 & 103.1 / 38.5 & 103 / 38.7 & 99.8 / 41.8 & 91.6 / 49.6 & 86.1 / 55.8 & 84.2 / 58 \\
 \midrule
 \multicolumn{8}{l}{\emph{GSM8K}} \\
 −0.5 & 160.3 / 47.7 & 155.5 / 53.6 & 152.1 / 58.8 & 146.1 / 65.9 & 146.1 / 65.9 & 146.1 / 65.9 & 146.1 / 65.9 \\
 −1 & 155.5 / 48.8 & 153.6 / 51.2 & 150.6 / 55.4 & 140.1 / 67.5 & 139.8 / 67.8 & 139.8 / 67.8 & 139.8 / 67.8 \\
-−1.5 & 140.1 / 47.3 & 139.7 / 47.8 & 138.4 / 49.7 & 126.1 / 63.5 & 123.3 / 67.0 & 123.1 / 67.2 & 123.1 / 67.2 \\
-−2 & 120.1 / 43.2 & 120.0 / 43.3 & 119.7 / 43.8 & 112.2 / 51.4 & 104.1 / 60.8 & 102.3 / 63.0 & 101.9 / 63.4 \\
-−2.5 & 102.6 / 39.0 & 102.6 / 39.0 & 102.5 / 39.1 & 100.4 / 41.1 & 92.0 / 48.7 & 85.3 / 56.1 & 82.6 / 59.3 \\
+−1.5 & 140.1 / 47.3 & 139.7 / 47.8 & 138.4 / 49.7 & 126.1 / 63.5 & 123.3 / 67 & 123.1 / 67.2 & 123.1 / 67.2 \\
+−2 & 120.1 / 43.2 & 120 / 43.3 & 119.7 / 43.8 & 112.2 / 51.4 & 104.1 / 60.8 & 102.3 / 63 & 101.9 / 63.4 \\
+−2.5 & 102.6 / 39 & 102.6 / 39 & 102.5 / 39.1 & 100.4 / 41.1 & 92 / 48.7 & 85.3 / 56.1 & 82.6 / 59.3 \\
 \bottomrule
 \end{tabular}
 \caption{The joint threshold sweep, as throughput (token/s) / energy efficiency (token/J).}
@@ -623,11 +669,11 @@ Figure~\ref{fig:headline} places both CAPIM points against LP-Spec and against a
 \toprule
  & Throughput (token/s) & Energy efficiency (token/J) & EDP (s\textperiodcentered mJ) \\
 \midrule
-CAPIM -- Standard & 153.0 & 46.2 & 0.141 \\
+CAPIM -- Standard & 153 & 46.2 & 0.141 \\
 CAPIM -- Low-power & 138.8 & 63.8 & 0.113 \\
 LP-Spec (simulated, best) & 126.9 & 31.9 & 0.247 \\
 LP-Spec (published) & 73.4 & 32.6 & 0.418 \\
-Autoregressive & 6.5 & 5.2 & 29.500 \\
+Autoregressive & 6.5 & 5.2 & 29.5 \\
 \bottomrule
 \end{tabular}
 \caption{The values underlying Figure~\ref{fig:headline}, including energy-delay product (EDP), Alpaca.}
@@ -672,7 +718,7 @@ The second phase evaluated the full architecture, pricing both of its thresholds
 
 Measured against LP-Spec, CAPIM exceeds this project's energy target and partly meets its throughput target. The two operating points reported in Section~\ref{sec:headline} bracket the range μ\textsubscript{th} opens up. Standard, the faster of them, reaches 1.45× the energy efficiency of LP-Spec's best simulated configuration while also running 1.21× faster, and Low-power reaches 2.00× the energy efficiency at 1.09× the throughput; against LP-Spec's published pair both are faster still, at 2.08× and 1.89×. The 20--30\% energy target is therefore cleared with margin at both settings. The 1.5×--2× throughput target is met against the published figure, but not against the fastest simulated configuration, where the margin narrows to 1.21× and 1.09×. That shortfall is structural, and Section~\ref{sec:headline} traces it to EAGLE-2's draft head, which grows its tree one step at a time where MEDUSA proposes a whole tree in a single parallel pass.
 
-The two run-time controls the architecture exposes are not left equally well understood, and the gap between them is the clearest opening for further work. μ\textsubscript{th} is ready to deploy: it moves the design monotonically along the energy--throughput exchange, its two ends have a clear meaning, and a device can turn it against its own battery and thermal state without further characterization. σ\textsubscript{th} is not in that state. This work fixed it by sweeping both datasets and taking the value that performed best, which is an experimental result rather than a rule a practitioner can apply to a new model or workload without repeating the sweep. Future work should replace that calibration with a principled way to set the gate, whether derived from the model's confidence distribution or adapted online as decoding proceeds.
+The two run-time controls the architecture exposes are not left equally well understood, and the gap between them is the clearest opening for further work. μ\textsubscript{th} is ready to deploy: it moves the design monotonically along the energy--throughput exchange, its two ends have a clear meaning, and a device can turn it against its own battery and thermal state without further characterization. σ\textsubscript{th} is not in that state. This work fixed it by sweeping both datasets and taking the value that performed best, which is an experimental result rather than a rule a practitioner can apply to a new model or workload without repeating the sweep. Future work should replace that calibration with a principled way to set the gate, such as adapting σ\textsubscript{th} online as decoding proceeds based on a moving average of recent verification outcomes.
 
 Several further directions follow from the design as it stands. EAGLE-3~\cite{li2025eagle3} is a newer speculative decoding method in the same family, and it shapes its draft tree from the same confidence score. Adapting CAPIM to run on it is a natural next step, and one this project could not take without training a draft head of its own, since no 7B backbone currently carries both an EAGLE-3 head and the MEDUSA head that the LP-Spec baseline requires for a fair comparison. A second direction is longer-context workloads, where pinning attention to the memory should pay off more as the key-value cache grows, a regime the two short-context datasets used here never reach.
 
@@ -683,79 +729,5 @@ The three questions the project set out to test are answered, and together their
 \addcontentsline{toc}{section}{References}
 \bibliographystyle{IEEEtran}
 \bibliography{references} 
-
-% ---------- Appendices ----------
-%use \appsec{…} and not \section{…} for each appendix. You can repeat \appsec{…} for B, C, etc., and it will always stay in sync.
-\newpage
-\appendix
-
-\newcommand{\appsec}[1]{%
-  \refstepcounter{section}
-  {\centering\normalfont\Large\bfseries Appendix \thesection: #1\par}
-  \addcontentsline{toc}{section}{Appendix \thesection: #1}
-  \vspace{1em}
-}
-
-\appsec{Workplan}
-
-\subsection{Gantt diagram of workplan}
-Table~\ref{table:gantt} presents a Gantt diagram of the tasks needed to complete this project.
-
-\begin{table}[H]
-\centering
-\caption{Gantt Diagram}
-\label{table:gantt}
-\renewcommand{\arraystretch}{1.4}
-\setlength{\tabcolsep}{4pt}
-\small
-\begin{tabular}{|l|c|c|c|c|c|c|c|c|}
-\hline
-\textbf{Task} & \textbf{Jan} & \textbf{Feb} & \textbf{Mar} & \textbf{Apr} & \textbf{May} & \textbf{June} & \textbf{Jul} & \textbf{Aug} \\
-\hline
-Literature Review & \cellcolor[HTML]{9BBB59} & \cellcolor[HTML]{9BBB59} & \cellcolor[HTML]{9BBB59} & & & & & \\
-\hline
-Baseline architecture study & & \cellcolor[HTML]{B6DDE8} & \cellcolor[HTML]{B6DDE8} & & & & & \\
-\hline
-EAGLE-2 behavior analysis & & & \cellcolor[HTML]{FBD4B4} & \cellcolor[HTML]{FBD4B4} & & & & \\
-\hline
-Architecture design & & & & \cellcolor[HTML]{E36C0A} & \cellcolor[HTML]{E36C0A} & & & \\
-\hline
-Architecture simulation & & & & & \cellcolor[HTML]{C2D69B} & \cellcolor[HTML]{C2D69B} & & \\
-\hline
-Results analysis and benchmarking & & & & & & \cellcolor[HTML]{D99594} & \cellcolor[HTML]{D99594} & \\
-\hline
-Writing report & & & & & \cellcolor{yellow} & \cellcolor{yellow} & \cellcolor{yellow} & \cellcolor{yellow} \\
-\hline
-Preparing video presentation & & & & & & & \cellcolor{yellow} & \cellcolor{yellow} \\
-\hline
-\end{tabular}
-\end{table}
-
-\subsection{Risks and mitigation plan}
-Table~\ref{table:risks} describes risks associated with completing this project and a corresponding mitigation plan.
-
-\begin{table}[H]
-\centering
-\caption{Risks and Corresponding Mitigation Plan}
-\label{table:risks}
-\renewcommand{\arraystretch}{1.3}
-\small
-\begin{tabular}{|p{4.2cm}|c|c|p{5.5cm}|}
-\hline
-\textbf{Risk} & \textbf{Likelihood} & \textbf{Impact} & \textbf{Contingency plan} \\
-\hline
-EAGLE-2 confidence scores do not strongly correlate with acceptance rate under mobile constraints & Low & High & Perform early statistical analysis to characterize confidence-acceptance correlation. If correlation is weak, look for other dynamic tree-based speculative decoding techniques. \\
-\hline
-Overhead of confidence monitoring and live pruning outweighs energy savings & Medium & Medium & Model confidence logic as a lightweight comparator and evaluate its overhead explicitly. If overhead is excessive, try adding more logic to fine-tune it. \\
-\hline
-PIM-NPU scheduling policy is sensitive to threshold tuning & Low & Medium & Perform sensitivity analysis across a range of confidence thresholds and tree sizes. Define conservative default policies and evaluate multiple operating modes (performance-focused vs.\ energy-focused). \\
-\hline
-Selected LLM models are too computationally heavy for full simulation & High & Low & Conduct simulations using available lab resources or by employing smaller models. If this remains insufficient, validate overall trends through multiple scaled-down configurations to ensure that the results generalize. \\
-\hline
-Projected energy or latency gains are smaller than expected & Medium & Medium & Emphasize qualitative insights and architectural trends rather than absolute gains. Compare against multiple baselines to demonstrate consistent improvements and analyse scenarios where confidence-aware control is most beneficial. \\
-\hline
-\end{tabular}
-\end{table}
-
 
 \end{document}
