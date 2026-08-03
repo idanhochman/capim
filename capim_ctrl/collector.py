@@ -1,38 +1,36 @@
 """
 CAPIM / EAGLE-2 GPU trace collector — the divergence-free (causal) trajectory source.
 
-Wraps a live EAGLE draft layer so the confidence gate fires INSIDE the drafting loop:
+Wraps a live EAGLE draft layer so the confidence gate fires inside the drafting loop:
 per step we read the vendored ``_capim_scores`` stash, keep the nodes whose cumulative
 log-prob clears ``sigma_th``, and overwrite the pruned nodes in ``retrieve_indices``
 with ``-1`` (``common.gating.invalidate_paths``).  The unchanged EAGLE verify then
 cannot accept past a pruned node, and ``update_inference_inputs`` advances the real KV
-by that shorter prefix -- so the recorded ``Trace`` is the gated trajectory, not a full
-tree pruned after the fact (the trace-replay divergence in-loop gating avoids).
+by that shorter prefix, so the recorded ``Trace`` is the gated trajectory rather than a
+full tree pruned after the fact.
 
 Two collection modes, one flag (``sigma_th``):
-  - **finite sigma_th** (e.g. -1.5): GATED.  Invalidate inside the loop; record ONLY
-    the kept sub-tree (+ the causal ``accepted_length``).  The driver then reads
-    mu = |nodes| and re-costs the trajectory-invariant knobs (draft_device, mu_th) into
-    the operation modes -- it must NOT re-threshold sigma (that would re-introduce the
-    divergence).  This is the headline generator.
-  - **sigma_th = -inf**: UNGATED / full-tree.  No invalidation, record EVERY drafted
-    node with its real acceptance.  This is the full-tree recording, so the
-    CPU driver can sweep sigma (CAPIM) / L (LP-Spec) off it -- the σ-characterization
-    figure and the native frontier still come from here.  (Recording pruned nodes on a
-    *gated* run would be wrong: their ``accepted=False`` is an artifact of our mask, not
-    a real target rejection.  Only the ungated run genuinely verifies every node.)
+  - finite sigma_th (e.g. -1.5): gated.  Invalidate inside the loop and record only the
+    kept sub-tree plus the causal ``accepted_length``.  The driver then reads
+    mu = |nodes| and re-costs the trajectory-invariant knobs (draft_device, mu_th); it
+    must not re-threshold sigma, which would reintroduce the divergence.  This is the
+    headline generator.
+  - sigma_th = -inf: ungated.  No invalidation; record every drafted node with its real
+    acceptance, so the CPU driver can sweep sigma (CAPIM) / L (LP-Spec) off it.
+    Recording pruned nodes on a gated run would instead be wrong, since their
+    ``accepted=False`` would be an artifact of our mask rather than a target rejection.
 
 Layering
 --------
-The recording/gating math is two PURE functions -- ``record_gated_step`` and
-``mark_accepted`` -- that take plain python lists (already ``.tolist()``-ed) and are
-unit-testable with NO torch, GPU or model (mirrors ``common.gating``).  Everything that
-touches torch / transformers / the EAGLE package is confined to ``load_eagle_model`` and
-the ``Collector`` wrapper methods, with the heavy imports done LOCALLY so this module
-imports cleanly on a CPU box for the GPU-free dry-run.
+The recording/gating math is two pure functions, ``record_gated_step`` and
+``mark_accepted``, which take plain python lists (already ``.tolist()``-ed) and are
+unit-testable without torch, a GPU or the model -- mirroring ``common.gating``.
+Everything touching torch / transformers / the EAGLE package is confined to
+``load_eagle_model`` and the ``Collector`` wrapper methods, with the heavy imports done
+locally so this module still imports on a CPU box for the GPU-free dry-run.
 
-``accepted_length`` convention: the RAW EAGLE ``accept_length`` (number of accepted
-DRAFT tokens, no bonus).  The driver adds the +1 bonus itself (capim_ctrl/driver.py).
+``accepted_length`` convention: the raw EAGLE ``accept_length`` (accepted draft tokens,
+no bonus).  The driver adds the +1 bonus itself (capim_ctrl/driver.py).
 """
 
 from __future__ import annotations
@@ -52,11 +50,10 @@ NEG_INF = float("-inf")
 def _parents_from_tree_mask(tree_mask_rows: Sequence[Sequence[bool]], n: int) -> Dict[int, int]:
     """Direct parent (in draft-index space, 0 = root) of each draft node 1..n.
 
-    ``tree_mask_rows[i][j]`` is True iff node ``j`` is an ancestor of node ``i`` (both
-    in draft-index space where 0 = root/sample token).  Row ``i`` always contains ``i``
-    (self) and ``0`` (root); the direct parent is the largest ancestor strictly below
-    ``i`` -- i.e. the second-largest True column.  EAGLE builds the tree in depth order,
-    so a parent's index is always < its child's.
+    ``tree_mask_rows[i][j]`` is True iff node ``j`` is an ancestor of node ``i``.  Row
+    ``i`` always contains ``i`` (self) and ``0`` (root), so the direct parent is the
+    second-largest True column.  EAGLE builds the tree in depth order, so a parent's
+    index is always below its child's.
     """
     parent: Dict[int, int] = {}
     for i in range(1, n + 1):
@@ -77,10 +74,10 @@ def record_gated_step(
     """Turn one drafted tree into (kept nodes, gated retrieve_indices, index remap).
 
     Returns:
-        nodes:          TokenNode list for the KEPT sub-tree (all nodes if sigma=-inf),
+        nodes:          TokenNode list for the kept sub-tree (all nodes if sigma=-inf),
                         in ascending draft-index (== depth) order.  ``parent_idx`` is the
-                        GLOBAL position within THIS list (-1 for children of the root),
-                        as the schema/driver require.  ``accepted`` starts False.
+                        position within this list (-1 for children of the root), as the
+                        schema/driver require.  ``accepted`` starts False.
         edited_rows:    retrieve_indices with each path truncated at its first pruned
                         node (identical object semantics to native -1 padding).  Equals
                         ``retrieve_rows`` unchanged when sigma = -inf.
@@ -132,12 +129,12 @@ def mark_accepted(
     best_candidate: int,
     accept_length: int,
 ) -> int:
-    """Flag the accepted prefix on the KEPT nodes; return accepted DRAFT-token count.
+    """Flag the accepted prefix on the kept nodes; return the accepted draft-token count.
 
     Walks the winning path (``edited_rows[best_candidate]``) over the first
     ``accept_length`` draft positions (column 0 is the always-skipped root, padding is
     -1) and sets ``accepted=True`` on the corresponding kept nodes.  Because the path is
-    the *gated* one, every accepted index is a kept node.
+    the gated one, every accepted index is a kept node.
     """
     if not (0 <= best_candidate < len(edited_rows)):
         return 0
@@ -359,9 +356,9 @@ def collect(
     One ``Collector`` per prompt (fresh step ids / pending), steps concatenated.  Greedy
     (temperature=0) by default -- the in-loop gate is provably exact there.
 
-    ``total_token`` must be the SAME value ``load_eagle_model`` was given: it is recorded
-    only so the trace is self-describing (it caps the tree at ``total_token-1`` nodes,
-    which with ``sigma_th=-inf`` is the fixed-top-m control -- see ``_collection_mode``).
+    ``total_token`` must be the same value ``load_eagle_model`` was given.  It is
+    recorded only so the trace is self-describing: it caps the tree at
+    ``total_token-1`` nodes, which with ``sigma_th=-inf`` is the fixed-top-m control.
     """
     import time
     import torch

@@ -7,38 +7,32 @@ counterpart to CAPIM's live σ_th gate.  Grounded in two papers:
   - MEDUSA (arXiv:2401.10774v3): a path's expected accept length = ∏_j p_j^{k_j}
     along the path under an explicit per-position independence assumption; the tree
     is grown greedily, repeatedly adding the frontier node with the highest path
-    product.  MEDUSA measures p_i^k OFFLINE on a calibration set (a fixed tree).
-  - LP-Spec (arXiv:2508.07227 §V-A): the SAME greedy construction, but p_i^k is
-    measured AT RUNTIME from verification history ("we track the speculation
+    product.  MEDUSA measures p_i^k offline on a calibration set (a fixed tree).
+  - LP-Spec (arXiv:2508.07227 §V-A): the same greedy construction, but p_i^k is
+    measured at runtime from verification history ("we track the speculation
     accuracy p_i^k … after each decoding step based on previous verification
     results").  The verified tree size L_spec emerges from a hardware perf/energy
     estimator's stop rule; we replace that stop with a sweep over L.
 
-Terminology (papers' wording): p_i^k = "accuracy of the k-th (top) prediction at
-the i-th decode head".  `i` = head = tree depth; `k` = which of that head's top-k
-candidates = "rank among same-parent siblings".  `k` is NOT stored in the trace —
-it is DERIVED from `parent_idx` here (siblings are stored contiguously in rank
-order; see the MEDUSA collector / synthetic fixtures).
+Terminology (papers' wording): p_i^k = "accuracy of the k-th (top) prediction at the
+i-th decode head".  `i` = head = tree depth; `k` = which of that head's top-k
+candidates = rank among same-parent siblings.  `k` is not stored in the trace; it is
+derived from `parent_idx` here, since siblings are stored contiguously in rank order.
 
 Key modelling choices:
-  - Reachable denominator [inferred, not specified by either paper]: a node counts
-    toward its (head, k) statistic only if its PARENT was accepted (i.e. the node was
-    actually reached).  LP-Spec §V-A says only that p_i^k is tracked "based on
-    previous verification results" — it gives no denominator.  We chose `accepted /
-    reachable` because p_i^k is meant to be head i's per-position prediction accuracy
-    (MEDUSA §2.3.3, a_j^{(i_j)}), and at runtime you can only OBSERVE that accuracy
-    when verification actually reaches position i (the prefix was accepted).  The
-    alternative `accepted / steps` would count never-reached steps as failures,
-    conflating head i's accuracy with an upstream prefix failing — biasing p_i^k down,
-    worst for deep nodes.  Offline this issue is invisible (MEDUSA's calibration has
-    ground truth at every position); it is purely a runtime correction.  Bonus: with
-    the conditional p_i^k, the path product telescopes by the chain rule to P(path
-    accepted) EXACTLY — no independence assumption — so it is at least as principled
-    as MEDUSA's marginal product.
-  - Unseen (head, k) → prior p = 1.0 ("full tree": keep it).  After step 0 (which
-    verifies the full static tree) every reachable (head, k) at shallow depths is
-    populated; deep (head, k) whose parents are rarely accepted stay at the prior,
-    so the DTP never prunes a branch it has not yet observed (conservative).
+  - Reachable denominator (inferred; neither paper specifies one).  A node counts
+    toward its (head, k) statistic only if its parent was accepted, i.e. the node was
+    actually reached.  We chose `accepted / reachable` because p_i^k is meant to be
+    head i's per-position prediction accuracy (MEDUSA §2.3.3, a_j^{(i_j)}), which at
+    runtime can only be observed when verification reaches position i.  The alternative
+    `accepted / steps` would count never-reached steps as failures, conflating head i's
+    accuracy with an upstream prefix failing and biasing p_i^k down, worst for deep
+    nodes.  With the conditional p_i^k the path product also telescopes by the chain
+    rule to P(path accepted) exactly, so it needs no independence assumption.
+  - Unseen (head, k) → prior p = 1.0, i.e. keep it.  After step 0 verifies the full
+    static tree every reachable shallow (head, k) is populated; deep ones whose parents
+    are rarely accepted stay at the prior, so the DTP never prunes a branch it has not
+    yet observed.
 """
 
 from __future__ import annotations
@@ -74,12 +68,12 @@ def k_pred_map(step: DecodeStep) -> Dict[Pos, int]:
 
 
 def parent_pos_map(step: DecodeStep) -> Dict[Pos, Pos]:
-    """Map each node's Pos -> its parent's Pos, resolving `parent_idx` (a GLOBAL
-    index into `step.nodes`) through the actual parent node.
+    """Map each node's Pos -> its parent's Pos, resolving `parent_idx` (a global index
+    into `step.nodes`) through the actual parent node.
 
-    The only Place that interprets the raw `parent_idx` integer, so the rest of the
-    DTP is convention-independent.  Depth-0 nodes have no entry (parent is the
-    always-accepted root).
+    The only place that interprets the raw `parent_idx` integer, so the rest of the DTP
+    is convention-independent.  Depth-0 nodes have no entry, their parent being the
+    always-accepted root.
     """
     pos: Dict[Pos, Pos] = {}
     for n in step.nodes:
@@ -158,10 +152,10 @@ def score_nodes(step: DecodeStep, hist: DTPHist, kp: Dict[Pos, int] = None,
     """Score every node by the path-product ∏ p along root→node, then return the
     nodes sorted for the greedy top-L selection.
 
-    Sort key = (score desc, depth asc, layer_idx asc).  Because p ≤ 1 a parent's
-    score ≥ its child's, and the depth-asc tiebreak keeps a parent strictly before
-    its child, so EVERY prefix of the sorted list is ancestor-closed — the greedy
-    "grow a connected tree" construction falls out for free, for all L at once.
+    Sort key = (score desc, depth asc, layer_idx asc).  Because p ≤ 1 a parent's score
+    ≥ its child's, and the depth-asc tiebreak keeps a parent strictly before its child,
+    so every prefix of the sorted list is ancestor-closed — the greedy "grow a connected
+    tree" construction falls out for free, for all L at once.
     """
     if kp is None:
         kp = k_pred_map(step)
@@ -183,7 +177,7 @@ def score_nodes(step: DecodeStep, hist: DTPHist, kp: Dict[Pos, int] = None,
 
 def effective_accept(step: DecodeStep, kept: set) -> int:
     """Realised accept length = the measured accepted path truncated at the first
-    accepted node NOT in the verified tree `kept` (a set of Pos).
+    accepted node not in the verified tree `kept` (a set of Pos).
 
     The accepted nodes form a connected chain from the root (MEDUSA commits one
     path).  Since `kept` is ancestor-closed, the realised accept is the longest

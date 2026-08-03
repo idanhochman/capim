@@ -6,9 +6,9 @@
 # + the LP-Spec baseline + autoregressive, per dataset, then prints one merged
 # table. No GPU, no deps (the drive path is pure stdlib).
 #
-#   arg 1 = sigma  (default -1.5)  — MUST match the EAGLE collection gate, since
+#   arg 1 = sigma  (default -1.5)  — must match the EAGLE collection gate, since
 #                                     it selects traces/eagle_<ds>_s<sigma>.json
-#   arg 2 = L      (default 4)     — MUST match the MEDUSA collection keep count,
+#   arg 2 = L      (default 4)     — must match the MEDUSA collection keep count,
 #                                     selects traces/medusa_<ds>_L<L>.json
 #   env DATASETS     which sets, space-separated.  default "alpaca gsm8k"
 #   env RESULTS_DIR  where drive JSONs land.       default "results"
@@ -47,7 +47,7 @@ for ds in $DATASETS; do
 done
 if [ "$missing" -ne 0 ]; then
   echo "error: collect the traces first (scripts/gpu/{eagle,medusa}/...) " >&2
-  echo "       with the SAME sigma=${SIGMA} / L=${L} this script expects." >&2
+  echo "       with the same sigma=${SIGMA} / L=${L} this script expects." >&2
   exit 1
 fi
 

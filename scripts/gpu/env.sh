@@ -12,7 +12,7 @@
 #      guard fails otherwise
 #   3. prints GPU + RAM so you can confirm the runtime (needs >= sm_75, e.g. T4)
 #
-# It deliberately does NOT install python deps: EAGLE and MEDUSA pin mutually
+# It deliberately does not install python deps: EAGLE and MEDUSA pin mutually
 # incompatible transformers, so each <method>/collect.sh installs its own beforehand.
 # ---------------------------------------------------------------------------
 set -euo pipefail

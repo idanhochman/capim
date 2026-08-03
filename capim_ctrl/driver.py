@@ -2,20 +2,20 @@
 CAPIM driver — re-costs an EAGLE-2 trace into per-step latency/energy.
 
 Per decode step:
-  1. DRAFT   - EAGLE head grown D depths; the σ_th gate terminates a branch before
-               drafting its descendants, so the drafted width at each depth is the
-               number of nodes whose parent survived the gate.  Draft FC/attn on the
-               draft_device (PIM default), nonlinear on NPU -> a PIM<->NPU ping-pong
+  1. Draft   - the EAGLE draft model grown D depths; the σ_th gate terminates a branch
+               before drafting its descendants, so the drafted width at each depth is
+               the number of nodes whose parent survived the gate.  Draft FC/attn on the
+               draft_device (PIM by default), nonlinear on NPU -> a PIM<->NPU ping-pong
                when draft_device=PIM.  Always sequential (autoregressive chain).
-  2. GATE    - mu = surviving tree size (sequencer.prune_tree on cumulative_log_prob).
-  3. ROUTE   - sequencer.route(mu, mu_th) -> the verify execution plan.
-  4. VERIFY  - one target forward over mu tokens, composed per the plan.
-  5. ACCEPT  - committed accepted prefix that survives the gate, + 1 bonus token.
+  2. Gate    - mu = surviving tree size (sequencer.prune_tree on cumulative_log_prob).
+  3. Route   - sequencer.route(mu, mu_th) -> the verify execution plan.
+  4. Verify  - one target forward over mu tokens, composed per the plan.
+  5. Accept  - committed accepted prefix that survives the gate, + 1 bonus token.
 
-sigma_th supports two modes.  On a trace already gated by the GPU collector, run
-with sigma_th = -inf so the gate is a no-op (the deliverable path).  On a full-tree
-trace, pass a finite sigma_th to apply the gate at re-cost time — e.g. to sweep
-sigma_th over existing traces, or for the full-tree kernel cross-check.
+sigma_th supports two modes.  On a trace already gated by the GPU collector, run with
+sigma_th = -inf so the gate is a no-op (the deliverable path).  On a full-tree trace,
+pass a finite sigma_th to apply the gate at re-cost time, e.g. to sweep sigma_th over
+existing traces.
 
 The driver owns all routing policy (its routers + the per-step exec choice from the
 sequencer); common/ only costs the tagged layers.
@@ -59,7 +59,7 @@ def router_capim_verify(fc_device: Dev):
 
 
 def router_eagle_draft(layer):
-    """Draft on PIM: weights/attention pinned to PIM, nonlinear -> NPU."""
+    """Draft on PIM: weights and attention pinned to PIM, nonlinear -> NPU."""
     if layer.type in (LayerType.FC, LayerType.MATMUL):
         return Dev.PIM
     return Dev.NPU
@@ -74,24 +74,22 @@ class CapimConfig:
     sigma_th: float = float("-inf")    # cumulative-log-prob gate (-inf on a gated trace)
     mu_th: int = 4                     # binary route threshold / speed<->energy mode dial
     all_npu: bool = False              # True -> EAGLE-2/NPU ablation
-    concurrent_verify: bool = True     # mu>=mu_th -> every GEMM column-split NPU||PIM
+    concurrent_verify: bool = True     # mu>=mu_th -> FC column-split NPU||PIM
     draft_device: Dev = Dev.PIM        # where draft FC/attn run (NL always NPU)
-    split_attention: Optional[bool] = None  # None -> follow route() (attention follows mu_th, the
-                                       # default).  Set False to PIN attention to PIM on the
-                                       # concurrent route (the old Attn-PIM rule), True to force the
-                                       # split.  Ablation override only; do not set in normal runs.
+    split_attention: Optional[bool] = None  # None -> follow route(), which pins attention to
+                                       # PIM.  Set True to force the column split instead.
+                                       # Ablation override only; leave None in normal runs.
     name: str = "CAPIM"
 
 
 def _generated_by_depth(step: DecodeStep, sigma_th: float):
-    """depth -> count of nodes CAPIM actually *generates* under the gate.
+    """depth -> count of nodes CAPIM actually generates under the gate.
 
-    A node is drafted (and so costs) iff its parent was expanded == its parent
-    survived the gate (depth-0 nodes hang off the always-expanded root).  By
-    monotonicity of cumulative_log_prob this single check is ancestor-closed.  The
-    set includes Boundary nodes that fail the gate themselves but were drafted once
-    to be scored before their branch is killed — the cost the proactive gate cannot
-    avoid.
+    A node is drafted (and so costs) iff its parent survived the gate; depth-0 nodes
+    hang off the always-expanded root.  Because cumulative_log_prob is monotone with
+    depth, that single check is ancestor-closed.  The set includes boundary nodes that
+    fail the gate themselves but were drafted once to be scored before their branch is
+    killed — the cost a proactive gate cannot avoid.
     """
     if sigma_th == float("-inf"):
         out = {}
@@ -137,10 +135,10 @@ def _effective_accept(step: DecodeStep, sigma_th: float) -> int:
 def drive(model: ModelConfig, trace: Trace, config: CapimConfig = None,
              npu: MobileNPU = None, pim: LPDDR5PIM = None,
              draft_cache: dict = None) -> DriverResult:
-    """draft_cache: optional {step_index -> Composed} reused across calls.  Draft
-    cost depends only on (sigma_th, draft_device), NOT mu_th, so a sweep that fixes
-    (sigma, draft_device) and varies mu_th can pass ONE cache to skip recomputing
-    draft.  The caller must Use a fresh cache per distinct (sigma_th, draft_device).
+    """draft_cache: optional {step_index -> Composed} reused across calls.  Draft cost
+    depends only on (sigma_th, draft_device) and not on mu_th, so a sweep that fixes
+    those two and varies mu_th can pass one cache to skip recomputing the draft.  The
+    caller must use a fresh cache per distinct (sigma_th, draft_device).
     """
     config = config or CapimConfig()
     npu = npu or MobileNPU()

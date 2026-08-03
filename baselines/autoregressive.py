@@ -1,9 +1,9 @@
 """
 Autoregressive baseline (lower bound / normalization anchor).
 
-No speculation: one full target forward per emitted token, on the NPU, at the
-token's REAL context length.  Replayed from a trace so it generates the same number
-of tokens at the same contexts as the SD runs (token-weighted per-token contexts).
+No speculation: one full target forward per emitted token, on the NPU, at the token's
+real context length.  Replayed from a trace so it generates the same number of tokens at
+the same contexts as the SD runs.
 """
 
 from __future__ import annotations

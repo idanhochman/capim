@@ -24,7 +24,7 @@
 # overwrites). 8-bit (LLM.int8): base int8, MEDUSA's vocab heads stay FP16 so
 # they load and emit real confidence scores. Same precision/prompts as EAGLE.
 #
-# NOTE: the CLI hardcodes the DTP policy to greedy_headk (MEDUSA's real rule);
+# Note: the CLI hardcodes the DTP policy to greedy_headk (MEDUSA's real rule);
 # there is currently no flag to record an UNGATED/full-tree MEDUSA trace
 # (needed later for the L-characterization sweep, not for this deliverable).
 # ---------------------------------------------------------------------------
@@ -56,5 +56,5 @@ for ds in $DATASETS; do
 done
 
 echo ""
-echo "==> DONE. Traces under traces/ . Sanity check each: mean_acceptance_rate"
+echo "==> Done. Traces under traces/ . Sanity check each: mean_acceptance_rate"
 echo "    non-trivial (GSM8K typically > Alpaca); tree_size ~ L each step."

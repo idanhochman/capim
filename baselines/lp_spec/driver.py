@@ -3,25 +3,25 @@ LP-Spec baseline driver — MEDUSA + retrospective DTP (trace-replay) + concurre
 NPU||PIM verification.
 
 Per decode step, replayed from a MEDUSA trace:
-  1. DRAFT  : K=5 MEDUSA heads, one parallel shot off a single hidden state (no
+  1. Draft  : K=5 MEDUSA heads, one parallel shot off a single hidden state (no
               attention, no KV), DAU column-split NPU||PIM like every other GEMM.
-  2. SELECT : the DTP picks which nodes to verify from a retrospective per-(head, k)
-              acceptance histogram (`dtp`).  Content-blind counterpart to CAPIM's
-              live σ_th gate — same greedy ∏ p construction, but the accuracies come
-              from PAST verification history, not this step.
-  3. VERIFY : ONE target forward over the kept tree (m = |kept|), composed
-              CONCURRENTLY — every GEMM column-split NPU||PIM at the DAU ratio, the
+  2. Select : the DTP picks which nodes to verify from a retrospective per-(head, k)
+              acceptance histogram (`dtp`).  Content-blind counterpart to CAPIM's live
+              σ_th gate — the same greedy ∏ p construction, but the accuracies come
+              from past verification history rather than this step.
+  3. Verify : one target forward over the kept tree (m = |kept|), composed
+              concurrently — every GEMM column-split NPU||PIM at the DAU ratio, the
               (1-r) output slice gathered over the bus, nonlinear additive on the NPU.
-              Attention is column-split too (split_attention=True) — the one place
+              Attention is column-split too (split_attention=True), the one place
               LP-Spec differs from CAPIM's large-tree verify.
-  4. ACCEPT : the measured accepted path truncated to the kept tree, + 1 bonus.
+  4. Accept : the measured accepted path truncated to the kept tree, + 1 bonus.
 
 `L_spec` (LP-Spec's verified tree size) is the swept knob `config.L_spec`; report
 LP-Spec as a band over L_spec.
 
-Histogram causality: at step t the selection uses history from steps < t only;
-step t's observations are folded in AFTER costing it.  Step 0 is a cold start that
-verifies the full static tree.
+Histogram causality: at step t the selection uses history from steps < t only; step t's
+observations are folded in after costing it.  Step 0 is a cold start that verifies the
+full static tree.
 """
 
 from __future__ import annotations
@@ -34,10 +34,9 @@ from common.devices.pim import LPDDR5PIM
 from common.model import build_decoder_layer, build_lm_head, build_medusa_draft
 from common.schema import DecodeStep, Trace
 from common.system import (
-    compose_concurrent,
     DriverResult,
     StepRecord,
-    compose_sequential,
+    compose_concurrent,
     cost_forward_pass,
     prefill_means,
     tag,
@@ -78,22 +77,16 @@ def drive(model: ModelConfig, trace: Trace, config: LPSpecConfig = None,
         pp = dtp.parent_pos_map(step)
 
         # 1. MEDUSA draft: K heads fired off one hidden state (no inter-head dependency,
-        #    no attention, no KV), composed CONCURRENTLY -- the DAU column-splits their
-        #    FC weights across NPU||PIM exactly as it does the backbone's.
-        #
-        #    CORRECTED 2026-07-12 (was pinned all-NPU + composed sequentially).  The heads
-        #    are ordinary FC layers over model parameters -- neither prefill nor nonlinear
-        #    -- and LP-Spec puts only those two on the NPU:
+        #    no attention, no KV), composed concurrently -- the DAU column-splits their
+        #    FC weights across NPU||PIM exactly as it does the backbone's.  The heads are
+        #    ordinary FC layers over model parameters, and LP-Spec puts only prefill and
+        #    nonlinear work on the NPU:
         #      §VI-A "Prefill stage of LLM inference and nonlinear functions are executed
         #             on the NPU."
         #      §V-C  "During NPU computation, model parameters are fetched from DRAM ranks,
         #             while PIM computation utilizes parameters stored in PIM ranks."
-        #    The old all-NPU pin streamed all 740 MB of head weight over the external bus
-        #    every iteration -- 57% of iteration latency and 32% of its energy -- which
-        #    handicapped the baseline, and did so asymmetrically, since CAPIM's EAGLE draft
-        #    is PIM-resident.  With this fix the driver reproduces LP-Spec's published
-        #    throughput to 1.02x (74.8 vs 73.4 token/s at L=8, Alpaca).
-        #    See scripts/cpu/validate_cost_model.py.
+        #    So composed, the driver reproduces LP-Spec's published throughput to 1.02x
+        #    (74.8 vs 73.4 token/s at L=8, Alpaca) -- see scripts/cpu/validate_cost_model.py.
         #
         #    No split_attention argument: the draft emits no MATMUL, so the flag is a
         #    no-op.  No tag() either -- compose_concurrent reads no layer.device.
@@ -117,7 +110,7 @@ def drive(model: ModelConfig, trace: Trace, config: LPSpecConfig = None,
 
         result.steps.append(_combine(step, draft, verify, tokens))
 
-        # 5. fold step t into the histogram (AFTER costing -> strict causality)
+        # 5. fold step t into the histogram (after costing -> strict causality)
         hist.update(step, kp, pp)
 
     return result

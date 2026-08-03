@@ -1,13 +1,13 @@
 """
 Locate + import the upstream speculative-decoding repos (EAGLE, Medusa).
 
-The two repos live as git SUBMODULES under ``sd_repos/`` (see ``.gitmodules``),
+The two repos live as git submodules under ``sd_repos/`` (see ``.gitmodules``),
 pinned to the exact commits the collectors were written against:
 
     sd_repos/EAGLE   @ cb7e084   -> ``import eagle...``   (CAPIM draft stack)
     sd_repos/Medusa  @ e2a5d20   -> ``import medusa...``  (LP-Spec baseline stack)
 
-They are NOT vendored into this tree: a fresh clone fetches them via
+They are not vendored into this tree: a fresh clone fetches them via
 ``git clone --recurse-submodules`` (or ``git submodule update --init``).  This
 module resolves their on-disk location and puts them on ``sys.path`` so the
 collectors can ``from eagle.model.ea_model import EaModel`` /
@@ -17,7 +17,7 @@ Design notes
 ------------
 * GPU-free and torch-free: importing THIS module never imports the repos.  Path
   resolution + the "did you run --recurse-submodules?" guard are pure filesystem
-  checks, so unit tests (e.g. the topK parity guard) can decide to SKIP without a
+  checks, so unit tests (e.g. the topK parity guard) can decide to skip without a
   GPU or the ML deps installed.
 * The presence check keys on a *specific source file* inside each submodule
   (``eagle/model/cnets1.py`` / ``medusa/model/utils.py``), not just the directory:

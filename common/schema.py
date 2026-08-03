@@ -2,18 +2,18 @@
 Trace schema — the shared contract between the GPU collectors and the CPU drivers.
 
 A `Trace` is a list of `DecodeStep`s recorded by running an instrumented SD method
-(EAGLE-2 or MEDUSA) on the shared Vicuna-7B backbone over Alpaca / GSM8K.  The
-σ-gate (CAPIM) / DTP (LP-Spec) fire INSIDE the drafting loop, so a recorded tree
-is the *gated, causal* trajectory — not a full tree pruned later.  The drivers
-only read `Trace` objects; they never touch the model.
+(EAGLE-2 or MEDUSA) on the shared Vicuna-7B backbone over Alpaca / GSM8K.  The σ-gate
+(CAPIM) and DTP (LP-Spec) fire inside the drafting loop, so a recorded tree is the
+gated, causal trajectory rather than a full tree pruned later.  The drivers only read
+`Trace` objects; they never touch the model.
 
 Two identity fields:
-  - model     : the backbone, shared across every trace (fairness invariant),
+  - model     : the backbone, shared across every trace (the fairness invariant),
                 e.g. "Vicuna-7B-v1.3".
-  - sd_method : the speculative-decoding method being compared — the real axis,
-                a canonical lowercase id the drivers/collectors dispatch on
-                ("eagle2" | "medusa").  The exact draft-head checkpoint is
-                provenance and lives in metadata["draft_head"].
+  - sd_method : the speculative-decoding method being compared — the real axis, a
+                canonical lowercase id the drivers/collectors dispatch on
+                ("eagle2" | "medusa").  The exact draft-head checkpoint is provenance
+                and lives in metadata["draft_head"].
 
 Per-node fields:
   - log_prob: per-token log-softmax probability at the node's depth.
@@ -21,8 +21,8 @@ Per-node fields:
     the σ-characterization figures group acceptance by this.
   - accepted: whether the target accepted this exact token at this step.
 
-This module is the contract ONLY — no model code, no synthetic generators
-(those are GPU-free test fixtures and live under tests/).
+This module is the contract only — no model code and no synthetic generators, which
+are test fixtures and live under tests/.
 """
 
 from __future__ import annotations
@@ -40,8 +40,8 @@ class TokenNode:
     token_id: int                # vocabulary index
     log_prob: float              # per-token log-softmax probability at this depth
     cumulative_log_prob: float   # sum of log_probs along the path root → this node
-    parent_idx: int              # GLOBAL index of the parent within the step's `nodes`
-                                 # list (nodes[parent_idx]); −1 for depth-0 nodes whose
+    parent_idx: int              # index of the parent within the step's `nodes` list
+                                 # (nodes[parent_idx]); −1 for depth-0 nodes whose
                                  # parent is the root / true accepted token.
     accepted: bool               # True if the target accepted this exact token
 

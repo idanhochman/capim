@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""Regenerate the Chapter 5 LaTeX table blocks straight from results/*.json.
+"""Regenerate the results-chapter LaTeX table blocks straight from results/*.json.
 
-Emits full \\begin{table}...\\end{table} environments for the four tables in
-main.tex whose numbers are computed rather than authored: the joint threshold
-sweep (tab:surface), the draft tree size sweep (tab:trees), and the headline
-comparison (tab:headline_values / tab:headline_ratio). Formatting (column
-spec, captions, labels) is fixed to match main.tex as of the 2026-07-19
-attention-pinning reversal -- paste the printed blocks in to replace the
-existing ones, then re-check any prose that cites specific numbers from them.
+Emits full \\begin{table}...\\end{table} environments for the tables in main.tex whose
+numbers are computed rather than authored: the joint threshold sweep (tab:surface), the
+draft tree size sweep (tab:trees), the LP-Spec L sweep (tab:lsweep) and the headline
+comparison (tab:headline_values / tab:headline_ratio). Column spec, captions and labels
+are fixed to match main.tex -- paste the printed blocks in to replace the existing ones,
+then re-check any prose that cites specific numbers from them.
 
-Reads results/drive_all.json (surface + headline) and
-results/pruning_analysis.json (trees). Pure stdlib, run from the capim/ dir:
+Reads results/drive_all.json (surface + headline) and results/pruning_analysis.json
+(trees). Pure stdlib, run from the capim/ dir:
 
-    python3 scripts/cpu/gen_tables.py                 # all four, to stdout
+    python3 scripts/cpu/gen_tables.py                 # all of them, to stdout
     python3 scripts/cpu/gen_tables.py --table surface # just one
 """
 
@@ -20,7 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 SIGMAS = [-0.5, -1.0, -1.5, -2.0, -2.5]
 MU_THS = [1, 2, 4, 8, 12, 16, 64]

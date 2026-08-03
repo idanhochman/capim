@@ -10,7 +10,7 @@ function of a Layer's shape (m, n, k, numOp, dbyte) and the device it runs on
 layer-type set is trimmed to what mobile batch=1 inference needs (PAPI's
 G2G/X2G all-reduce collapse to a single COMM type for the PIM<->NPU handoff).
 
-Builders emit layers device-AGNOSTIC; tagging a layer with a device is the
+Builders emit device-agnostic layers; tagging one with a device is the
 driver/router's job.
 """
 
@@ -71,7 +71,7 @@ class Layer:
         raise ValueError(f"get_flops: unsupported layer type {t}")
 
     def get_size(self):
-        """Return (in1, in2, out) traffic in BYTES.
+        """Return (in1, in2, out) traffic in bytes.
 
         FC/MATMUL: in1 = activation, in2 = weight/second-operand, out = result.
         NL/COMM:   in1 = out = the activation, in2 = 0 (glu reads two inputs).
@@ -99,8 +99,8 @@ class Layer:
 
 
 # ===========================================================================
-# Builders — each emits one Unit of work; the driver scales per-layer cost by
-# n_layers and tags devices.  Layer names follow PAPI's LLAMA branch.
+# Builders — each emits one unit of work; the driver scales per-layer cost by
+# n_layers and tags devices.  Layer names follow PAPI's LLaMA branch.
 # ===========================================================================
 
 def build_decoder_layer(model: ModelConfig, m: int, ctx: int,
@@ -110,11 +110,11 @@ def build_decoder_layer(model: ModelConfig, m: int, ctx: int,
     `m`   = tokens processed this pass (prefill: prompt length; verify: tree size μ).
     `ctx` = KV-cache length the attention attends over.
 
-    `eagle_draft=True` emits the EAGLE draft head's single decoder layer.  EAGLE's
-    head layer is index 0, so its input_layernorm is never built
-    (EAGLE/eagle/model/cnets1.py:399 `if self.index != 0`), and the head has no
-    final norm — the LM head reads the layer output directly (cnets1.py:732).  Net:
-    ONE RMSNorm, not two — here the trailing `norm2` is dropped.
+    `eagle_draft=True` emits the EAGLE draft model's single decoder layer.  That layer
+    is index 0, so its input_layernorm is never built (cnets1.py:399
+    `if self.index != 0`), and the draft model has no final norm — the LM head reads the
+    layer output directly (cnets1.py:732).  Net: one RMSNorm rather than two, so the
+    trailing `norm2` is dropped here.
     """
     d = model.d_model            # hidden / residual-stream width
     h = model.n_heads            # query heads (attention numOp)
@@ -155,7 +155,7 @@ def build_lm_head(model: ModelConfig, m: int) -> Layer:
 
 def build_verify_pass(model: ModelConfig, m: int, ctx: int) -> List[Layer]:
     """The target's per-step verification work over a μ=`m`-node tree at context
-    `ctx`: ONE decoder layer (driver scales by n_layers) + the lm_head once."""
+    `ctx`: one decoder layer (the driver scales by n_layers) + the lm_head once."""
     layers = build_decoder_layer(model, m=m, ctx=ctx)
     layers.append(build_lm_head(model, m=m))
     return layers
@@ -165,17 +165,16 @@ def build_prefill(model: ModelConfig, prompt_len: int) -> Tuple[List[Layer], Lay
     """One-time prefill over a `prompt_len`-token prompt, returned as the
     (decoder_block, lm_head) pair that `cost_forward_pass` consumes directly.
 
-    Prefill is a FULL target forward pass, so — like verify and AR — the single
-    decoder block must be scaled by n_layers and the lm_head added once.  Returning
-    the block and head SEPARATELY (rather than one flat list) puts prefill on the
-    same convention every real forward pass uses: `cost_forward_pass(block, head,
-    n_layers, ...)`.  Composing the pair as a flat list would wrongly scale the head
-    by n_layers too.
+    Prefill is a full target forward pass, so — like verify and AR — the single decoder
+    block must be scaled by n_layers and the lm_head added once.  Returning the block and
+    head separately, rather than as one flat list, puts prefill on the convention every
+    forward pass uses: `cost_forward_pass(block, head, n_layers, ...)`.  Composing the
+    pair as a flat list would wrongly scale the head by n_layers too.
 
-    First-class: the driver emits this once on the NPU (compute-bound GEMM) and
-    reports it ONLY in end-to-end latency — never in the per-step token/s · token/J
-    · EDP rates.  Causal prompt → attention context == prompt_len.  The lm_head is
-    over the single last position (the first sampled token), m=1.
+    The driver emits this once on the NPU and reports it only in end-to-end latency,
+    never in the per-step token/s, token/J or EDP rates.  A causal prompt gives
+    attention context == prompt_len, and the lm_head covers the single last position
+    (the first sampled token), so m=1.
     """
     block = build_decoder_layer(model, m=prompt_len, ctx=prompt_len)
     head = build_lm_head(model, m=1)
@@ -185,10 +184,10 @@ def build_prefill(model: ModelConfig, prompt_len: int) -> Tuple[List[Layer], Lay
 def build_eagle_draft_step(model: ModelConfig, width: int, ctx: int) -> List[Layer]:
     """One EAGLE-2 draft sub-step over `width` tree nodes at KV context `ctx`.
 
-    Grounded in EAGLE/eagle/model/cnets1.py: fusion FC (concat emb+feature, k=2d)
-    -> one decoder layer (eagle_draft: one RMSNorm) -> shared lm_head -> sampling
-    softmax (the confidence signal).  The driver calls this once per tree depth
-    with `width` = nodes at that depth.
+    Grounded in EAGLE's cnets1.py: fusion FC (concat emb+feature, k=2d) -> one decoder
+    layer (eagle_draft: one RMSNorm) -> shared lm_head -> sampling softmax, which is the
+    confidence signal.  The driver calls this once per tree depth with `width` = the
+    nodes at that depth.
     """
     d = model.d_model
     db = model.bytes_per_param
@@ -206,10 +205,9 @@ def build_medusa_draft(model: ModelConfig, medusa_num_heads: int = 5,
                        medusa_num_layers: int = 1) -> List[Layer]:
     """The MEDUSA heads from one hidden state (parallel, batch=1, the "free tail").
 
-    Grounded in Medusa/medusa/model/medusa_model.py: ResBlock(x)=x+SiLU(Linear)
-    per head, then each head's OWN lm_head (K independent vocab projections), then
-    one fused sampling softmax (top-k for the static tree).  No autoregression, no
-    attention, no KV.
+    Grounded in medusa_model.py: ResBlock(x)=x+SiLU(Linear) per head, then each head's
+    own lm_head (K independent vocab projections), then one fused sampling softmax
+    (top-k for the static tree).  No autoregression, no attention, no KV.
     """
     d = model.d_model
     db = model.bytes_per_param

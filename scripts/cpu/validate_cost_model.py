@@ -1,47 +1,34 @@
 #!/usr/bin/env python3
 """
-Section 5.2 -- validation of the shared cost model.
+Validation of the shared cost model.
 
-Four checks, none of which involves CAPIM.  A cost model that CAPIM is scored on has
-to reproduce things already known; this is that test.
+Five checks, none of which involves CAPIM.  A cost model that CAPIM is scored on has to
+reproduce things already known; this is that test.
 
-  (A) METRIC DEFINITIONS.  LP-Spec Table III is internally consistent with
+  (A) Metric definitions.  LP-Spec Table III is internally consistent with
       EDP = (s/token) x (mJ/token):  (1/73.4) x (1000/32.6) = 0.4179 ~ 0.418.
       So their metric definitions are common/report.py's, and the comparison is
       well-posed rather than a units coincidence.
 
-  (B) AR DRIVER vs its analytical roofline bound.  At batch=1 the NPU streams every
+  (B) AR driver vs its analytical roofline bound.  At batch=1 the NPU streams every
       weight once per token over the external bus, so
           t >= W / (B_npu * U_m)      E >= W * 8 * pJ_offchip
-      are hard bounds needing no simulator.  The AR driver must sit ON them.
+      are hard bounds needing no simulator.  The AR driver must sit on them.
 
-  (C) LP-SPEC DRIVER vs LP-Spec's OWN published Table III (arXiv 2508.07227v3):
+  (C) LP-Spec driver vs LP-Spec's own published Table III (arXiv 2508.07227v3):
           73.4 token/s | 32.6 token/J | 0.418 s.mJ    (Llama2-7B, INT8, Medusa, Alpaca)
 
-  (D) REACHABILITY.  The sharpest form of (C): is the published throughput even
-      attainable under our PIM constant, under the most generous possible assumptions
-      (all-PIM, one ALU pass, zero draft, zero nonlinear)?  If the baseline's own
-      published result is impossible on our model of the baseline's own hardware, the
-      hardware constant is wrong -- no calibration can rescue it.
+  (D) Reachability.  The sharpest form of (C): is the published throughput even
+      attainable under our PIM constant, given the most generous assumptions (all-PIM,
+      one ALU pass, zero draft, zero nonlinear)?  If the baseline's own published result
+      is impossible on our model of the baseline's own hardware, the hardware constant
+      is wrong and no calibration can rescue it.
 
-THE PIM THROUGHPUT PARAMETER
-----------------------------
-common/config.py sets PIM_INT8_GOPS = 409.6e9 and comments it "4 dies x 102.4 GOPS
-each".  LP-Spec says the opposite, in its own words:
+  (E) Where the mu_th verify-latency crossover lands, as a consequence of (D).
 
-  VI-A  "Compared with prior PIM designs, we enhance the performance by 4x to
-         409.6 GOPS for EACH DIE."
-  Tab.II Samsung LPDDR5-PIM baseline = 102.4 GOPS@INT8 per die; LP-Spec = 4x that.
-  V-A   "An MPU consists of four 32-wide SIMD ALUs" -> 128 INT8 MACs per MPU.
-         Table II "# MPU = 8", in a block whose "Capacity = 1 GB" is per-die:
-             8 MPU x 128 MAC x 2 op x 200 MHz = 409.6 GOPS  per die.  (exact)
-  VI-B  "the DRAM memory configuration is set to 3 PIM ranks and 1 DRAM rank";
-         Table II "# Die / Rank = 4"  ->  12 PIM dies.
-
-  => the machine LP-Spec evaluates has 409.6 GOPS/die x 12 dies = 4.9152 TOPS,
-     not the 409.6 GOPS aggregate we model.  We are 12x low on PIM compute.
-
-The sweep below varies only that constant.
+Checks (C)-(E) sweep PIM_INT8_GOPS over three readings of LP-Spec's Table II, since the
+per-die vs aggregate reading moves it by 12x.  config.py takes the per-die reading, for
+the reasons set out there.
 """
 
 from __future__ import annotations
@@ -66,9 +53,9 @@ PUB_TPS, PUB_TPJ, PUB_EDP = 73.4, 32.6, 0.418     # LP-Spec Table III, Llama2-7B
 MEDUSA_TAU = 2.5                                   # accepted tokens/iteration (EAGLE-2 Tab.1)
 
 VARIANTS = [
-    ("409.6 GOPS  [current config: '409.6 aggregate over 4 dies']", 409.6e9),
+    ("409.6 GOPS  [read as an aggregate over 4 dies]", 409.6e9),
     ("1.6384 TOPS [409.6 GOPS/die x 4 dies  = 1 PIM rank]", 4 * 409.6e9),
-    ("4.9152 TOPS [409.6 GOPS/die x 12 dies = 3 PIM ranks]", 12 * 409.6e9),
+    ("4.9152 TOPS [409.6 GOPS/die x 12 dies = 3 PIM ranks; config.py]", 12 * 409.6e9),
 ]
 
 
@@ -101,10 +88,10 @@ def check_b_ar_bound(trace: Trace) -> None:
 
 
 def check_c_lpspec(dataset: str, L_values) -> None:
-    """CAUSAL replay: each L_spec is costed from the trace COLLECTED at that L
+    """Causal replay: each L_spec is costed from the trace collected at that L
     (traces/medusa_<ds>_L<L>.json), never by re-thresholding one trace at cost time.
-    A MEDUSA tree recorded under keep-count L=64 was shaped by L=64; re-costing it at
-    L=4 would replay a trajectory that decoding never took."""
+    A MEDUSA tree recorded under keep-count L=64 was shaped by L=64, so re-costing it
+    at L=4 would replay a trajectory decoding never took."""
     print("=" * 76)
     print(f"(C)  LP-Spec driver vs LP-Spec Table III "
           f"({PUB_TPS} token/s | {PUB_TPJ} token/J | {PUB_EDP} s.mJ)")

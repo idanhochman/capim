@@ -2,7 +2,7 @@
 #
 # Build the CAPIM final report (capim/doc/main.tex).
 #
-# The report uses fontspec (\setmainfont{Arial} / Times New Roman), so it MUST
+# The report uses fontspec (\setmainfont{Arial} / Times New Roman), so it must
 # be compiled with XeLaTeX, not pdfLaTeX. The full sequence is:
 #   xelatex -> bibtex -> makeindex (nomencl List of Symbols) -> xelatex -> xelatex
 #
@@ -30,7 +30,7 @@ if [[ "${1:-}" == "clean" ]]; then
 fi
 
 if ! command -v xelatex >/dev/null 2>&1; then
-    echo "ERROR: xelatex not found. Install TinyTeX (see CLAUDE.md sec 6) and re-run." >&2
+    echo "ERROR: xelatex not found. Install TinyTeX and re-run." >&2
     exit 1
 fi
 

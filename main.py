@@ -85,17 +85,17 @@ def cmd_collect(args: argparse.Namespace) -> None:
 def _collection_mode(trace: Trace) -> str:
     """Which budget RULE causally shaped this trace's tree -- the curve a plot puts it on.
 
-    Three rules select nodes from the SAME cumulative-log-prob ordering, differing only
+    Three rules select nodes from the same cumulative-log-prob ordering, differing only
     in how the cardinality is fixed:
       "gated"  EAGLE + finite sigma_th: keep {cum >= sigma}, so k is chosen by the
-               CONTEXT.  (Because cum is monotone-decreasing with depth, this set is
-               exactly the top-k of that ordering -- and is ancestor-closed for free.)
+               context.  Because cum decreases monotonically with depth, this set is
+               exactly the top-k of that ordering, and ancestor-closed for free.
       "topm"   EAGLE + sigma_th = -inf: no gate, so the tree is whatever EAGLE-2's own
-               rerank keeps -- the top total_token-1 nodes.  This is the FIXED-BUDGET
-               CONTROL for "gated": same drafter, same ranking, m fixed instead of
-               adaptive.  Note the shipped default (total_token=60, mu=59) means the old
-               'ungated full tree' traces ARE the m=59 point of this curve, for free.
-      "medusa" MEDUSA + DTP keep-count L (LP-Spec): a different drafter AND ranking.
+               rerank keeps, the top total_token-1 nodes.  This is the fixed-budget
+               control for "gated": same drafter, same ranking, m fixed instead of
+               adaptive.  Since the shipped default is total_token=60 (mu=59), the
+               ungated full-tree traces are the m=59 point of this curve for free.
+      "medusa" MEDUSA + DTP keep-count L (LP-Spec): a different drafter and ranking.
     """
     md = trace.metadata or {}
     method = trace.sd_method or md.get("sd_method") or ""
@@ -107,7 +107,7 @@ def _collection_mode(trace: Trace) -> str:
 
 
 def _collection_gate(trace: Trace) -> float:
-    """The value of the swept knob this trace was CAUSALLY collected at, per its mode:
+    """The value of the swept knob this trace was causally collected at, per its mode:
     sigma_th (gated), the node budget m (topm), or L (medusa).  This is the x-axis of
     the frontier/budget figures, and (unlike config.sigma_th, which is -inf for
     replay-as-gated) it is the value that actually shaped the tree.  Old traces carry
@@ -245,7 +245,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="EAGLE rerank budget (--method eagle): the draft tree is capped "
                          "at total_token-1 nodes, so mu == total_token-1 exactly. The "
                          "default 60 is EAGLE-2's shipped budget (mu=59). Combine with "
-                         "--sigma-th=-inf to collect the fixed-top-m CONTROL that isolates "
+                         "--sigma-th=-inf to collect the fixed-top-m control that isolates "
                          "the gate (adaptive k) from the drafter (same ranking, fixed m)")
     pc.add_argument("--L", type=int, default=4,
                     help="MEDUSA DTP keep count (--method medusa)")

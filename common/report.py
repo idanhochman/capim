@@ -1,14 +1,14 @@
 """
 Reporting + aggregation.
 
-Aggregation unit = per prompt (group StepRecords by prompt_id).  For each prompt we
-sum the decode-step TOTALS (tokens, time, energy); the headline metrics are then
-token-WEIGHTED across prompts — i.e. the ratio of the averaged totals
-(mean_tokens / mean_time), which equals Σtokens / Σtime — so a long prompt counts
-for more than a short one.  The per-prompt spread is reported separately as a SAMPLE
-std (n-1) over the per-prompt rates, for error bars only.
+Aggregation unit = per prompt (group StepRecords by prompt_id).  For each prompt we sum
+the decode-step totals (tokens, time, energy); the headline metrics are then
+token-weighted across prompts, being the ratio of the averaged totals
+(mean_tokens / mean_time), which equals Σtokens / Σtime, so a long prompt counts for
+more than a short one.  The per-prompt spread is reported separately as a sample std
+(n-1) over the per-prompt rates, for error bars only.
 
-Metrics match LP-Spec Table III, all on the DECODE steps only (prefill excluded):
+Metrics match LP-Spec Table III, all on the decode steps only (prefill excluded):
   - throughput        token/s   = tokens / time
   - energy efficiency token/J   = tokens / energy
   - EDP (per token)             = (time / tokens) * (energy_mJ / tokens)   [s·mJ]
@@ -29,7 +29,7 @@ import math
 from dataclasses import dataclass
 from typing import Dict, List
 
-from common.system import DriverResult, StepRecord
+from common.system import DriverResult
 
 
 @dataclass
@@ -172,16 +172,16 @@ def comparison_table(results: List[DriverResult],
 
 # --- per-component breakdown (PAPI Fig. 12 analog) -----------------------------
 #
-# Token-weighted decomposition of each driver's per-token cost into typed ops and
-# energy components.  Diagnostic AND thesis figure: it shows WHERE latency/energy
-# go (FC vs attention vs nonlinear vs PIM<->NPU communication) and, for the
+# Token-weighted decomposition of each driver's per-token cost into typed ops and energy
+# components.  Serves as both diagnostic and thesis figure: it shows where latency and
+# energy go (FC vs attention vs nonlinear vs PIM<->NPU communication) and, for the
 # concurrent LP-Spec driver, where its column-split makespan sits in the
-# [all-PIM, all-NPU] band -- the check on whether PIM gets compute-bound credit.
+# [all-PIM, all-NPU] band.
 #
-# NOTE on time_by_device: for sequential drivers (AR/CAPIM) NPU+PIM sums to the
-# wall clock (a true partition); for the concurrent driver (LP-Spec) BOTH devices
-# are charged the full makespan, so it is device-BUSY-time (utilization) and sums
-# to MORE than wall clock.  The wall-clock latency partition is time_by_type.
+# On time_by_device: for sequential drivers (AR/CAPIM) NPU+PIM sums to the wall clock, a
+# true partition; for the concurrent driver (LP-Spec) both devices are charged the full
+# makespan, so it is device busy-time and sums to more than the wall clock.  The
+# wall-clock latency partition is time_by_type.
 
 # LayerType.name -> PAPI-style rollup bucket (FC / Attn / NL / Comm).
 _TYPE_ROLLUP = {

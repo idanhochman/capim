@@ -64,18 +64,18 @@ DS_LABEL  = {"alpaca": "Alpaca", "gsm8k": "GSM8K"}
 DATASETS  = ["alpaca", "gsm8k"]
 
 # Threshold symbols, matching the report's text-mode `σ\textsubscript{th}` convention.
-# Unicode subscripts (U+209C, U+2095), NOT mathtext: mathtext renders italic in its own
+# Unicode subscripts (U+209C, U+2095), not mathtext: mathtext renders italic in its own
 # font and ignores the surrounding weight, so `$\mu_{th}$` would come out italic and
 # non-bold inside the bold axes titles. These glyphs are present in DejaVu Sans and
 # inherit family and weight from whatever draws them.
 SIG_TH = "σₜₕ"
 MU_TH  = "μₜₕ"
 
-# CAPIM's two shipped operating points. mu_th is NOT a per-step scheduler — measured
-# against the traces, the router never fires in the gated regime (0% of steps go to
-# the NPU at every EDP-optimal mu_th) — so it is presented as a two-position power
-# dial: Standard (mu_th=1) takes the concurrent NPU||PIM split on most steps,
-# Low-power (mu_th=64) stays entirely PIM-resident.
+# CAPIM's two shipped operating points. mu_th is not a per-step scheduler: measured
+# against the traces, the router never fires in the gated regime (0% of steps go to the
+# NPU at every EDP-optimal mu_th), so it is presented as a two-position power dial.
+# Standard (mu_th=1) takes the concurrent NPU||PIM split on most steps, Low-power
+# (mu_th=64) stays entirely PIM-resident.
 MODE_COLOR = {1: BLUE, 64: AQUA}
 
 # CAPIM's sigma_th and LP-Spec's L are the same kind of knob (how much draft budget
@@ -146,11 +146,11 @@ def load_pruning() -> dict:
 # Shared helpers
 # ---------------------------------------------------------------------------
 def _is_topm(r) -> bool:
-    """The ungated EAGLE run is NOT a sigma point -- it is the fixed-budget CONTROL.
+    """The ungated EAGLE run is not a sigma point -- it is the fixed-budget control.
 
     main.py:_collection_mode tags it "topm" with collection_gate = m = 59 (EAGLE-2's own
     rerank cap). Same drafter, same ranking, cardinality fixed instead of context-chosen,
-    so it is the arm the gate is measured AGAINST -- not the loose end of the sigma axis.
+    so it is the arm the gate is measured against, not the loose end of the sigma axis.
     """
     return r.get("collection_mode") == "topm"
 
@@ -159,9 +159,9 @@ def _best_lp_spec(drive: list[dict], ds: str) -> dict:
     """LP-Spec's own best simulated operating point: max throughput over its L sweep.
 
     Not hardcoded to a specific L -- re-derived from the data every run, so a cost-model
-    change that shifts which L wins (as the 2026-07-12 PIM_INT8_GOPS fix did not, but a
-    future one could) is picked up automatically. Mirrors gen_tables.py's identical
-    selection, so the table and the figure can never disagree on which point is "best".
+    change that shifts which L wins is picked up automatically. Mirrors gen_tables.py's
+    identical selection, so the table and the figure can never disagree on which point
+    is "best".
     """
     lp = [r for r in drive if r["driver"] == "lp_spec" and r["dataset"] == ds]
     return max(lp, key=lambda r: r["token_per_s_mean"])
@@ -170,7 +170,7 @@ def _best_lp_spec(drive: list[dict], ds: str) -> dict:
 def _knob_colorbar(fig, cax, order, swatch, label):
     """Categorical colorbar for a 'draft budget' knob (CAPIM's sigma_th, LP-Spec's L).
 
-    Takes an EXPLICIT cax: `colorbar(ax=...)` steals space by re-laying-out the parent
+    Takes an explicit cax: `colorbar(ax=...)` steals space by re-laying-out the parent
     axes, which a later `subplots_adjust` then silently undoes -> bars overlap the panel.
     """
     cmap = ListedColormap(swatch)
@@ -280,25 +280,25 @@ def fig_validation(outdir: Path) -> Path:
 
 # ---------------------------------------------------------------------------
 # fig:surface_alpaca / fig:surface_gsm8k (sec:tradeoff) — the whole
-# (sigma_th x mu_th) operating surface, ONE FIGURE PER DATASET.
+# (sigma_th x mu_th) operating surface, one figure per dataset.
 # ---------------------------------------------------------------------------
 def fig_surface(outdir: Path) -> list[Path]:
     """Split from a single two-panel figure so each dataset can be placed next to the
-    prose that discusses it. The two figures are drawn by the same code on LOCKED,
-    IDENTICAL axis limits: side by side the eye corrects for a shifted axis, but across
-    two floats several pages apart it cannot, so the limits are the only thing keeping
-    the datasets comparable. Both carry the same annotated bead.
+    prose that discusses it. Both figures are drawn by the same code on locked, identical
+    axis limits: side by side the eye corrects for a shifted axis, but across two floats
+    several pages apart it cannot, so the limits are the only thing keeping the datasets
+    comparable. Both carry the same annotated bead.
 
-    Shows the gated sweep (PIM draft; the top-m control dropped) as a controllable
-    REGION rather than a ranked set of points with one winner: sigma is the series
-    identity (line = which gate), mu_th is travel along it, lower-right (mu_th=1, fast
-    and thirsty) -> upper-left (mu_th=64, slow and lean). No baseline is drawn -- this
-    section asks what the design space looks like; the comparison against LP-Spec and
-    AR belongs to fig:headline.
+    Shows the gated sweep (PIM draft; the top-m control dropped) as a controllable region
+    rather than a ranked set of points with one winner: sigma is the series identity, so
+    a line is a gate, and mu_th is travel along it, from lower-right (mu_th=1, fast and
+    thirsty) to upper-left (mu_th=64, slow and lean). No baseline is drawn, since this
+    section asks what the design space looks like; the comparison against LP-Spec and AR
+    belongs to fig:headline.
 
     Mechanically, any mu_th above the largest tree seen at a given sigma fires for no
-    step, so those families are IDENTICAL (all-PIM): each sigma line FANS OUT at low
-    mu_th and COLLAPSES onto a plateau at high mu_th.
+    step, so those families are identical and all-PIM: each sigma line fans out at low
+    mu_th and collapses onto a plateau at high mu_th.
     """
     drive = load_drive()
     # mu_th 2 and 16 dropped: 2 sits between 1 and 4 on the same line and 16 is inside
@@ -349,7 +349,7 @@ def fig_surface(outdir: Path) -> list[Path]:
                     xytext=(0, 34), ha="center", fontsize=8.5, color=INK_2,
                     zorder=6, arrowprops=arrow)
 
-        # Framed to the sweep, and LOCKED ACROSS BOTH DATASETS -- these are separate
+        # Framed to the sweep, and locked across both datasets -- these are separate
         # floats, so shared limits are what make them comparable. A tradeoff scatter
         # has no zero baseline to truncate, and a full-range view wastes the canvas.
         ax.set_xlim(78, 168)

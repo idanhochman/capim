@@ -6,7 +6,7 @@
 #     bash capim/scripts/gpu/eagle/sanity.sh          # sigma_th=-1.5
 #     bash capim/scripts/gpu/eagle/sanity.sh -inf     # ungated full tree
 # Checks after it runs (traces/eagle_sanity_s<sigma>.json):
-#   * steps > 0 and log_probs VARY (not all -ln|V|) -> draft head loaded (FP16)
+#   * steps > 0 and log_probs vary (not all -ln|V|) -> draft model loaded (FP16)
 #   * tree_size varies step-to-step (dynamic tree, unlike MEDUSA's constant 63)
 set -euo pipefail
 SIGMA_TH="${1:-${SIGMA_TH:--1.5}}" DATASETS=sanity \

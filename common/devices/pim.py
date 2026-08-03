@@ -4,26 +4,19 @@ LPDDR5-PIM cost model (near-bank compute).
 Analytical roofline (no external cycle-accurate PIM sim):
   FC / MATMUL:  time = max(ceil(m/N_ALU)*N_ALU * per_token_flops / PIM_INT8_GOPS,
                           traffic / PIM_INTERNAL_BW)
-The N_ALU=4 ALUs are TOKEN-parallel (LP-Spec §V-B: T_PIM = N_params/BW ×
+The N_ALU=4 ALUs are token-parallel (LP-Spec §V-B: T_PIM = N_params/BW ×
 ceil(L_spec/N_ALU)), so an m-token batch is rounded up to a full ALU pass for the
-COMPUTE term: m=1..4 all cost one pass.  This is the batch=1 / small-tree regime.
-Only FC / MATMUL / COMM run on PIM; nonlinear ops route to the NPU (the cross-bank
-reduction wall) and are asserted out in cost().
+compute term, and m=1..4 all cost one pass.  Only FC / MATMUL / COMM run on PIM;
+nonlinear ops route to the NPU and are asserted out in cost().
 
-The PIM ridge point (PIM_INT8_GOPS / PIM_INTERNAL_BW, both in config.py) sits far
-below GEMV's arithmetic intensity of 2 ops/byte, so GEMV is COMPUTE-bound on PIM and
-this normally reduces to flops/GOPS — but the full max() is kept so the bound tag is
-computed, not assumed.  PAPI's "GEMM = reuse(=m) × GEMV" is implicit: flops already
-carries m.
+In practice PIM comes out compute-bound here, so the max() usually reduces to
+flops/GOPS, but the full form is kept so the bound tag is computed rather than assumed.
 
-COMM (the PIM<->NPU handoff) is costed here on the external bus (51.2 GB/s):
+COMM (the PIM<->NPU handoff) is costed on the external bus:
   time = FIXED_CROSSING_LATENCY_S + bytes / PIM_EXTERNAL_BW
-The fixed per-crossing latency is the DRAM mode-switch cost (PIM-compute mode <->
-host-readable mode); the NL data itself is tiny, so the crossing is dominated by
-this fixed setup, not bandwidth.
 
 Energy: internal-bank traffic × PIM_ENERGY + MACs × INT8_OP energy; external-bus
-traffic (COMM) is charged at the off-chip energy rate.
+traffic (COMM) is charged at the off-chip rate.
 """
 
 from __future__ import annotations
@@ -46,17 +39,13 @@ from common.devices.base import CostResult, Device, zero_energy
 from common.model import Layer
 from common.type import LayerType
 
-# Fixed latency charged once per PIM<->NPU crossing, on top of the bandwidth term
-# (the activation bytes themselves).  Physically a DRAM MODE SWITCH: the PIM bank
-# leaves all-bank PIM-compute mode and returns to host-readable mode for the NPU to
-# read the activation (and back for the next PIM kernel).  Per Samsung's commercial
-# DRAM-PIM paper (Lee et al., ISCA 2021), a mode transition is a short sequence of
-# standard DRAM commands (ACT/PRE to a reserved PIM_CONF space) — not a privileged
-# MRS — so its cost is governed by DRAM row-cycle timing, not a kernel launch.
-#
-# Magnitude from LP-Spec Table II DRAM timing (our LPDDR5-PIM baseline): one
-# ACT->PRE->ACT cycle = tRC = tRAS + tRP ≈ 61 ns; a handoff is ~1–3 such cycles
-# => ~60–180 ns.  Point estimate 100 ns.
+# Fixed latency charged once per PIM<->NPU crossing, on top of the bandwidth term.
+# Physically a DRAM mode switch: the bank leaves all-bank PIM-compute mode and returns
+# to host-readable mode so the NPU can read the activation, then switches back.  Per
+# Samsung's commercial DRAM-PIM paper (Lee et al., ISCA 2021) a mode transition is a
+# short sequence of standard DRAM commands, so its cost follows DRAM row-cycle timing
+# rather than a kernel launch.  From LP-Spec Table II timing, one ACT->PRE->ACT cycle is
+# tRC ≈ 61 ns and a handoff takes 1-3 of them, giving ~60-180 ns.
 FIXED_CROSSING_LATENCY_S: float = 100.0e-9   # 100 ns per crossing (DRAM mode switch)
 
 
@@ -93,9 +82,9 @@ class LPDDR5PIM(Device):
         traffic = in1 + in2 + out
 
         # N_ALU token-batching (LP-Spec §V-B): a weight pass serves up to n_alu draft
-        # tokens, so verifying m tokens takes ceil(m/n_alu) passes.  Round the batch
-        # up to a full pass for the COMPUTE term only -> m=1..n_alu all cost one pass.
-        # Energy stays on the true `flops` below (idle lanes do no MACs); flops is
+        # tokens, so verifying m tokens takes ceil(m/n_alu) passes.  Round the batch up
+        # to a full pass for the compute term only, so m=1..n_alu all cost one pass.
+        # Energy stays on the true `flops` below, since idle lanes do no MACs; flops is
         # linear in m, so scaling by m_eff/m pads it exactly.
         m = layer.m
         if m > 0:

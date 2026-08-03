@@ -34,4 +34,4 @@ class ExecModel(Enum):
 class Phase(Enum):
     """Which part of inference a layer list belongs to."""
     PREFILL = 0
-    DECODE = 1
+    decode = 1

@@ -1,7 +1,7 @@
 """
 GPU-free synthetic Trace fixtures for unit-testing the cost plane and drivers.
 
-These are NOT part of the schema contract (common/schema.py) — they are test
+These are not part of the schema contract (common/schema.py) — they are test
 data generators only.  `make_synthetic_trace` mimics an EAGLE-style dynamic tree;
 `make_synthetic_medusa_trace` mimics a MEDUSA static tree with a single accepted
 path and stationary per-(head, k) acceptance, so the LP-Spec DTP histogram can

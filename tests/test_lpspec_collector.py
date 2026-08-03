@@ -70,7 +70,7 @@ def test_record_kept_reindexes_parents():
     nodes, remap = record_kept(meta, {1, 3})
     assert remap == {1: 0, 3: 1}
     assert [n.depth for n in nodes] == [0, 1]
-    assert [n.layer_idx for n in nodes] == [0, 0]              # STATIC layer_idx preserved
+    assert [n.layer_idx for n in nodes] == [0, 0]              # static layer_idx preserved
     assert [n.parent_idx for n in nodes] == [-1, 0]           # n3's parent n1 -> new pos 0
 
 
@@ -79,7 +79,7 @@ def test_dtp_select_maps_to_node_indices():
     ss = structural_step(meta)
     p2i = pos_to_index(meta)
     hist = dtp.DTPHist()
-    # t == 0 -> cold start returns the FULL static tree
+    # t == 0 -> cold start returns the full static tree
     kept_pos = dtp.select_kept(ss, 0, 4, "greedy_headk", hist)
     kept_idx = {p2i[p] for p in kept_pos}
     assert kept_idx == {1, 2, 3, 4}

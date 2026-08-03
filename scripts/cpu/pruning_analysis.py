@@ -8,7 +8,7 @@ Two trace families, with different roles (see Ch. 4):
 
   * ungated  (eagle_{ds}_s-inf.json)  -- the measurement instrument.  Every node was
     genuinely submitted to the target, so `accepted` is a real verification outcome.
-    This is the ONLY trace in which we can see what a gate would have thrown away:
+    This is the only trace in which we can see what a gate would have thrown away:
     in a gated run a pruned node is never verified and carries no label.
   * causal   (eagle_{ds}_s-{sigma}.json) -- the ground truth for what a gated system
     actually produces.  The gate fired inside the decode loop, so a pruned node
@@ -73,7 +73,7 @@ def fixed_budget(tr: Trace) -> dict:
     depth = max(s.max_depth for s in tr.steps) + 1        # levels, not 0-based index
     width = nodes / n_steps
 
-    # Only ONE root->leaf path is accepted per iteration, so at most `depth` nodes of a
+    # Only one root->leaf path is accepted per iteration, so at most `depth` nodes of a
     # `width`-node tree can ever be accepted.  Most of the rejection rate is that bound.
     ceiling = depth / width
     density = accepted / nodes
@@ -117,7 +117,7 @@ def marginal_yield(causal: dict, ungated: dict, knee_sigma: float = SIGMA_OP) ->
 # 5.2.2 -- how much can you prune, and what does it cost?
 # ---------------------------------------------------------------------------
 def static_sweep(tr: Trace, sigmas=SWEEP_SIGMAS) -> list[dict]:
-    """Apply sigma to the UNGATED trace after the fact.
+    """Apply sigma to the ungated trace after the fact.
 
     Counterfactual, and unavoidably so: it is the only way to see the acceptance
     outcome of a node a gate would have removed.  Licensed by agreement() below.
@@ -240,7 +240,7 @@ def signal_value(tr: Trace, static_rows: list[dict]) -> dict:
     out = []
     for d in depth_rows:
         budget = d["nodes_kept_frac"]
-        # the confidence gate at the SAME node budget.  static_rows runs sigma high->low,
+        # the confidence gate at the same node budget.  static_rows runs sigma high->low,
         # so nodes_kept_frac is already ascending -- interpolate on it directly.
         xs = [r["nodes_kept_frac"] for r in static_rows]
         ys = [r["accepted_retained_frac"] for r in static_rows]

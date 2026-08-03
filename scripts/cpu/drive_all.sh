@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# CAPIM — CPU-only CANONICAL drive: re-cost every collected trace into ONE
+# CAPIM — CPU-only canonical drive: re-cost every collected trace into one
 # self-describing results artifact, results/drive_all.json.
 #
 # This is the single source of truth the figures + comparison table read.  It
 # sweeps the full design grid so the plots never re-drive and never parse trace
 # filenames (each record carries dataset, driver, config{mu_th,draft_device} /
-# {L_spec}, and collection_gate = the sigma/L the trace was CAUSALLY gated at).
+# {L_spec}, and collection_gate = the sigma/L the trace was causally gated at).
 #
-# CAUSAL-ONLY: each EAGLE trace is replayed as-gated (--sigma-th=-inf), so the
+# Causal only: each EAGLE trace is replayed as-gated (--sigma-th=-inf), so the
 # swept sigma axis IS the collection gate (which trace file we load), not a
 # re-gate at cost time.  Likewise each MEDUSA trace is replayed at L_spec = its
 # collection L (>= its tree_size -> pass-through).  No trace is re-thresholded.

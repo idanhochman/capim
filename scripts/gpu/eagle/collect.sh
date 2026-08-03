@@ -13,9 +13,9 @@
 #     SIGMA_TH     cumulative-log-prob gate(s); space-separated to SWEEP. default "-1.5"
 #                  "-inf" = no gate: the tree is then whatever EAGLE-2's own rerank keeps.
 #     TOTAL_TOKEN  EAGLE rerank budget(s); space-separated to SWEEP.      default "60"
-#                  Caps the tree at TOTAL_TOKEN-1 nodes, so mu == TOTAL_TOKEN-1 EXACTLY.
+#                  Caps the tree at TOTAL_TOKEN-1 nodes, so mu == TOTAL_TOKEN-1 exactly.
 #                  60 is EAGLE-2's shipped budget (mu=59). With SIGMA_TH=-inf this is the
-#                  fixed-top-m CONTROL -- prefer the ./topm.sh wrapper, which takes m.
+#                  fixed-top-m control -- prefer the ./topm.sh wrapper, which takes m.
 #     DATASETS     which sets; space-separated. "sanity" -> the 5 built-in prompts.
 #                                                            default "alpaca gsm8k"
 #     N_PROMPTS    prompts per dataset.                      default 100
@@ -27,8 +27,8 @@
 #
 # Output: traces/eagle_<dataset>_s<sigma>.json for a gate sweep, or _m<m>.json when a
 # non-default budget is set (the swept knob is in the name, so a sweep never overwrites).
-# 8-bit (LLM.int8): base int8, EAGLE draft head stays FP16 (EaModel loads it separately,
-# so it is NOT quantized) -> scores track FP16.
+# 8-bit (LLM.int8): base int8, EAGLE draft model stays FP16 (EaModel loads it separately,
+# so it is not quantized) -> scores track FP16.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
@@ -70,5 +70,5 @@ for ds in $DATASETS; do
 done
 
 echo ""
-echo "==> DONE. Traces under traces/ . Sanity check each: log_probs VARY (not all"
+echo "==> Done. Traces under traces/ . Sanity check each: log_probs vary (not all"
 echo "    -ln|V|), tree_size varies step-to-step (dynamic), accept > the Medusa run."

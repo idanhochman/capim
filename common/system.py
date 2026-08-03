@@ -3,24 +3,20 @@ Composition: turn a device-tagged layer list into a step latency + energy.
 
 A driver emits typed layers (tagged with a device by its router) and composes
 their per-op costs with one of two execution models.  Both composers share the
-identical Device.cost(), so the comparison stays fair.
+same Device.cost(), so the comparison stays fair.
 
   compose_sequential — additive, no PIM/NPU concurrency, with a PIM<->NPU COMM
-    crossing at each device switch.  Used for:
-      * AR (all-NPU);
-      * every CAPIM/LP-Spec DRAFT step (autoregressive dependency chain → no
-        FC||attn overlap, so always sequential);
-      * CAPIM's verify when μ < μ_th (the all-PIM low-power route).
+    crossing at each device switch.  Used for AR (all-NPU), every CAPIM/LP-Spec
+    draft step (an autoregressive chain cannot overlap FC with attention), and
+    CAPIM's verify when μ < μ_th.
 
-  compose_concurrent — makespan: every GEMM column-split NPU||PIM at the DAU ratio
+  compose_concurrent — makespan: each GEMM column-split NPU||PIM at the DAU ratio
     r, PIM's (1-r) output slice gathered over the bus, nonlinear glue additive on
-    the NPU.  `split_attention` distinguishes the two users:
-      * True  → LP-Spec: attention MATMULs are column-split too (PIM's KV slice is
-        gathered each kernel).
-      * False → the Attn-PIM ablation: FC is split NPU||PIM but attention stays
-        PIM-pinned (its KV slice never crosses the bus), overlapping the FC makespan
-        on the PIM side.  NOT CAPIM's default — attention follows μ_th like every
-        other GEMM (CapimConfig.split_attention=None); this flag is an override.
+    the NPU.  `split_attention` separates the two users:
+      * True  → LP-Spec: attention matmuls are column-split like every other GEMM,
+        so PIM's KV slice is gathered over the bus each kernel.
+      * False → CAPIM: only the FC path is split; attention stays PIM-pinned and its
+        KV slice never crosses the bus.
 """
 
 from __future__ import annotations
@@ -54,7 +50,7 @@ class Composed:
     # Concurrent-only diagnostics: the all-NPU and all-PIM time of the column-split
     # FC/MATMUL kernels (the makespan they actually cost lands in time_by_type).
     # Zero for sequential composition.  Lets the breakdown show where a concurrent
-    # makespan sits in the [all-PIM, all-NPU] band (the PIM cost-model check).
+    # makespan sits in the [all-PIM, all-NPU] band.
     split_t_npu_bound: float = 0.0
     split_t_pim_bound: float = 0.0
 
@@ -89,9 +85,8 @@ def compose_sequential(layers: List[Layer], npu: MobileNPU, pim: LPDDR5PIM,
                        count_crossings: bool = True) -> Composed:
     """Additive composition with a COMM crossing at each device switch.
 
-    No PIM/NPU concurrency: latency is the sum of per-layer costs plus a PIM<->NPU
-    crossing wherever consecutive layers land on different devices.  Used for AR,
-    all CAPIM/LP-Spec draft steps, and CAPIM's small-tree (μ<μ_th) all-PIM verify.
+    Latency is the sum of per-layer costs plus a PIM<->NPU crossing wherever
+    consecutive layers land on different devices.
     """
     out = Composed()
     prev: Dev = None
@@ -123,27 +118,21 @@ def compose_concurrent(layers: List[Layer], npu: MobileNPU, pim: LPDDR5PIM,
                        split_attention: bool = True) -> Composed:
     """Makespan via the DAU's balanced column-wise GEMM split.
 
-    Used by LP-Spec (split_attention=True) and by CAPIM's large-tree (μ≥μ_th)
-    verify (split_attention=False).  Neither routes whole kernels: each GEMM is
-    partitioned column-wise across NPU and PIM in a ratio the DAU picks so the two
-    devices finish together.
-
-    `split_attention`:
-      - True  (LP-Spec): attention MATMULs are column-split like every other GEMM,
-        so PIM's KV slice is gathered over the external bus each kernel.
-      - False (Attn-PIM ablation, NOT CAPIM's default): attention stays PIM-pinned and
-        overlaps the split FC kernels — its KV slice never crosses the bus.  Added to
-        t_compute (it shares the verify critical path) but charged NO gather/crossing.
+    Used by LP-Spec (split_attention=True) and by CAPIM's large-tree μ≥μ_th verify
+    (split_attention=False).  Neither routes whole kernels: each GEMM is partitioned
+    column-wise across NPU and PIM in a ratio the DAU picks so the two devices finish
+    together.  With split_attention=False the attention matmuls stay PIM-pinned and
+    overlap the split FC kernels, so they add to t_compute but pay no gather.
 
     Balance (derived from LP-Spec's "synchronize NPU and PIM" prose, §V-B; the paper
     prints per-share times T_NPU, T_PIM and T_total=min(·), not the closed form):
         r = t_p / (t_n + t_p)            # NPU/DRAM column share; (1-r) -> PIM
         t_kernel = r*t_n = t_n*t_p/(t_n+t_p)   # parallel-combination makespan
-    Energy is blended E = r*E_n + (1-r)*E_p (NPU share reads weights off-chip = dear;
-    PIM share reads in-bank = cheap — the asymmetry CAPIM exploits).  Nonlinear ops
-    are never split -> additive on the NPU.  A column split leaves each device with a
-    slice of the output, so PIM's (1-r) slice is gathered over the bus (one COMM) per
-    split kernel before the next op reads the full activation.
+    Energy is blended E = r*E_n + (1-r)*E_p — the NPU share reads weights off-chip and
+    the PIM share reads in-bank, which is the asymmetry CAPIM exploits.  Nonlinear ops
+    are never split, so they stay additive on the NPU.  A column split leaves each
+    device with a slice of the output, so PIM's (1-r) slice is gathered over the bus
+    (one COMM per split kernel) before the next op reads the full activation.
 
         t_total = Σ t_kernel + Σ t_gather + Σ t_nl_npu
     """
@@ -153,9 +142,9 @@ def compose_concurrent(layers: List[Layer], npu: MobileNPU, pim: LPDDR5PIM,
     t_nl = 0.0
     for layer in layers:
         if layer.type == LayerType.MATMUL and not split_attention:
-            # attention stays PIM-pinned (KV in-bank): overlaps the FC makespan on
-            # the PIM side, so it is on the verify critical path (-> t_compute) but
-            # pays no bus gather / crossing.
+            # attention stays PIM-pinned (KV in-bank): it overlaps the FC makespan on
+            # the PIM side, so it lands on the verify critical path (t_compute) but
+            # pays no bus gather.
             c_p = pim.cost(layer)
             t_compute += c_p.time_s
             out.split_t_pim_bound += c_p.time_s
@@ -217,16 +206,12 @@ def cost_forward_pass(decoder_block: List[Layer], head: Layer, n_layers: int,
     scaled by `n_layers`.
 
     exec_model selects the composition mechanism:
-      SEQUENTIAL : additive compose with PIM<->NPU crossings at device switches,
-                   plus the (n_layers-1) inter-block boundary hops the single-block
-                   scaling skips — added only when the block's last layer (norm2)
-                   and first layer (qkv) sit on different devices.
-      CONCURRENT : DAU makespan (every GEMM column-split NPU||PIM at the balance
-                   ratio, nonlinear additive on the NPU).  `split_attention`:
-                     True  -> attention MATMULs are column-split like every GEMM
-                              (PIM's KV slice gathered over the bus each kernel);
-                     False -> attention stays PIM-pinned (KV in-bank, never crosses
-                              the bus) and overlaps the FC makespan.
+      SEQUENTIAL : additive compose with PIM<->NPU crossings at device switches, plus
+                   the (n_layers-1) inter-block boundary hops the single-block scaling
+                   skips — added only when the block's last layer (norm2) and first
+                   layer (qkv) sit on different devices.
+      CONCURRENT : DAU makespan; `split_attention` is passed straight through to
+                   compose_concurrent.
     """
     if exec_model == ExecModel.CONCURRENT:
         total = compose_concurrent(decoder_block, npu, pim,
@@ -253,7 +238,7 @@ def cost_forward_pass(decoder_block: List[Layer], head: Layer, n_layers: int,
         total.crossings += reps
 
     # lm_head (once): a single-element list, so compose_sequential adds no crossing
-    # before it (prev resets to None) — matching the old separate-compose behaviour.
+    # before it (prev resets to None).
     total.merge(compose_sequential([head], npu, pim))
     return total
 
@@ -262,13 +247,11 @@ def prefill_means(model: ModelConfig, trace: Trace,
                   npu: MobileNPU, pim: LPDDR5PIM) -> Tuple[float, float]:
     """Mean one-time prefill (time_s, energy_j) per prompt over a trace.
 
-    Prefill is one full forward pass over the prompt on the NPU — a fixed
-    placement, not a per-step routing choice: n_layers decoder blocks + one lm_head,
-    costed with the shared `cost_forward_pass` primitive.  prompt_len per prompt =
-    the smallest context_length over that prompt's steps (the pre-decode KV size);
-    the per-prompt costs are averaged to match the reporter's per-prompt
-    aggregation.  Reported only in end-to-end latency, never in the per-step
-    token/s / token/J / EDP rates.
+    Prefill is one full forward pass over the prompt on the NPU — a fixed placement,
+    not a per-step routing choice.  prompt_len per prompt = the smallest
+    context_length over that prompt's steps (the pre-decode KV size); the per-prompt
+    costs are averaged to match the reporter's per-prompt aggregation.  Reported only
+    in end-to-end latency, never in the per-step token/s / token/J / EDP rates.
     """
     len_by_prompt: Dict[int, int] = {}
     for s in trace.steps:
@@ -312,12 +295,10 @@ class DriverResult:
     driver: str
     model: str
     steps: List[StepRecord] = field(default_factory=list)
-    # One-time prefill cost (per generated sequence), kept separate From the decode
+    # One-time prefill cost (per generated sequence), kept separate from the decode
     # steps so the per-step rates (token/s, token/J, EDP) exclude it by construction.
-    # Stored as a per-prompt mean (one prefill per prompt; the prompt-length variation
-    # is folded in by the driver).  Used only by the end-to-end latency metric;
-    # energy stays decode-only, so prefill_energy_j is carried for completeness but is
-    # not Added to the token/J figure.
+    # Stored as a per-prompt mean.  Used only by the end-to-end latency metric; energy
+    # stays decode-only, so prefill_energy_j is carried but not added to token/J.
     prefill_time_s: float = 0.0
     prefill_energy_j: float = 0.0
 

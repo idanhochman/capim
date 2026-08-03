@@ -2,45 +2,46 @@
 LP-Spec / MEDUSA GPU trace collector — the causal, divergence-free baseline source.
 
 The symmetric counterpart to ``capim_ctrl/collector.py``: it runs LP-Spec's retrospective
-Draft Token Pruner (DTP) inside The MEDUSA loop so the recorded ``Trace`` is the gated
+Draft Token Pruner (DTP) inside the MEDUSA loop so the recorded ``Trace`` is the gated
 trajectory, not a full static tree pruned after the fact.  Per step:
 
-  1. SELECT   the DTP scores the full STATIC tree from the current retrospective
+  1. Select   the DTP scores the full static tree from the current retrospective
               per-(head,k) histogram and keeps the greedy top-L (L=4; step 0 = full-tree
               cold start).  (`baselines.lp_spec.dtp`, ported unchanged.)
-  2. GATE     overwrite the pruned nodes in ``retrieve_indices`` with ``-1``
+  2. Gate     overwrite the pruned nodes in ``retrieve_indices`` with ``-1``
               (`common.gating.invalidate_paths`) so MEDUSA's greedy verify cannot accept
               past a pruned node and the real KV advances by the shorter prefix.
-  3. RECORD   emit ONLY the kept sub-tree (+ causal ``accepted_length``).
-  4. UPDATE   fold THIS step's *verified* acceptances into the histogram (causal:
+  3. Record   emit only the kept sub-tree, plus the causal ``accepted_length``.
+  4. Update   fold this step's verified acceptances into the histogram (causal:
               selection at step t used history < t only).
 
-The reason MEDUSA needs care EAGLE does not: ``retrieve_indices`` is the same
-STATIC buffer object that ``medusa_generate`` hands to ``generate_candidates``,
-``tree_decoding`` AND ``update_inference_inputs`` in one iteration.  So we mutate that
-buffer IN PLACE (``copy_``) inside the ``generate_candidates`` hook -- editing a wrapper-
-local copy would leave ``update_inference_inputs`` advancing the KV by the un-gated
-prefix.  We always rebuild from a pristine snapshot, and restore it on detach.
+MEDUSA needs care EAGLE does not, because ``retrieve_indices`` is the same static buffer
+object that ``medusa_generate`` hands to ``generate_candidates``, ``tree_decoding`` and
+``update_inference_inputs`` within one iteration.  We therefore mutate that buffer in
+place (``copy_``) inside the ``generate_candidates`` hook; editing a wrapper-local copy
+would leave ``update_inference_inputs`` advancing the KV by the un-gated prefix.  We
+always rebuild from a pristine snapshot and restore it on detach.
 
-DTP identity subtlety: k_pred (the "k" in p_i^k) is the node's rank among ALL its static
-siblings.  It must be derived from the FULL static tree, never from the pruned sub-tree
-(where pruned siblings would shift the ranks).  So ``kp``/``pp`` are computed ONCE from
-the static structure and passed to both ``select_kept`` and ``hist.update`` every step.
+DTP identity subtlety: k_pred (the "k" in p_i^k) is the node's rank among all its static
+siblings, so it must be derived from the full static tree rather than the pruned
+sub-tree, where pruned siblings would shift the ranks.  ``kp``/``pp`` are therefore
+computed once from the static structure and passed to both ``select_kept`` and
+``hist.update`` every step.
 
 Histogram/step-index semantics match the CPU driver (`baselines/lp_spec/driver.py`): the
-DTP histogram persists across prompts and the step index ``t`` is global, so the full-tree
-cold start happens once.  Re-costing: feed the gated ``Trace`` to the driver with a large
-``L_spec`` (>= full tree) -- the DTP then keeps every recorded node (pass-through, like
-CAPIM's sigma=-inf), so cost depends only on the recorded gated ``mu = |nodes|``.
+DTP histogram persists across prompts and the step index ``t`` is global, so the
+full-tree cold start happens once.  To re-cost, feed the gated ``Trace`` to the driver
+with an ``L_spec`` at least the full tree size; the DTP then keeps every recorded node,
+so cost depends only on the recorded gated ``mu = |nodes|``.
 
-The LP-Spec driver's DTP keys solely on depth / layer_idx / parent_idx / accepted, and the
-cost model on the node count -- so ``cumulative_log_prob`` stays 0.0 (MEDUSA has no live
-per-node confidence).  The real ``token_id`` / ``token_str`` ARE recorded (from
-``tree_candidates``) for readable traces; nothing in the driver reads them.
+The LP-Spec driver's DTP keys solely on depth / layer_idx / parent_idx / accepted, and
+the cost model on the node count, so ``cumulative_log_prob`` stays 0.0 -- MEDUSA has no
+live per-node confidence.  The real ``token_id`` / ``token_str`` are still recorded from
+``tree_candidates`` for readable traces, though nothing in the driver reads them.
 
-Layering mirrors the EAGLE collector: the tree math is pure torch-free functions
-(unit-testable with plain lists); torch / transformers / medusa imports are LOCAL to the
-model-facing methods so this module imports on a CPU box for the GPU-free dry-run.
+Layering mirrors the EAGLE collector: the tree math is pure torch-free functions,
+unit-testable with plain lists, and the torch / transformers / medusa imports are local
+to the model-facing methods so this module imports on a CPU box for the dry-run.
 """
 
 from __future__ import annotations
@@ -91,7 +92,7 @@ def _node(depth: int, layer_idx: int, parent_idx: int, accepted: bool = False) -
 
 
 def structural_step(meta: Dict[int, Tuple[int, int, int]]) -> DecodeStep:
-    """The full STATIC tree as a DecodeStep for the DTP (node list pos == index-1)."""
+    """The full static tree as a DecodeStep for the DTP (node list pos == index-1)."""
     nodes = []
     for v in sorted(meta):
         depth, li, parent = meta[v]
@@ -111,8 +112,8 @@ def record_kept(
 ) -> Tuple[List[TokenNode], Dict[int, int]]:
     """Kept sub-tree as TokenNodes (ascending node index) + {node index -> list pos}.
 
-    ``parent_idx`` is re-indexed to the KEPT list position (-1 for children of the root);
-    depth / layer_idx stay the STATIC values so Pos identity is preserved across steps.
+    ``parent_idx`` is re-indexed to the kept list position (-1 for children of the root);
+    depth / layer_idx stay the static values so Pos identity is preserved across steps.
     """
     kept = sorted(kept_node_indices)
     new_index_of = {v: k for k, v in enumerate(kept)}
@@ -131,7 +132,7 @@ def mark_accepted(
     best_candidate: int,
     accept_length: int,
 ) -> int:
-    """Flag the accepted prefix on the kept nodes; return accepted DRAFT-token count.
+    """Flag the accepted prefix on the kept nodes; return the accepted draft-token count.
 
     Walks the winning (gated) path over the first ``accept_length`` draft positions
     (column 0 is the root, -1 is padding) and marks the corresponding kept nodes.
@@ -177,7 +178,7 @@ def load_medusa_model(
     # Keep the Medusa heads (+ lm_head) in fp16, never quantized: they are missing
     # from the base checkpoint so transformers _init_weights random-inits them, and
     # .normal_() on an int8/4-bit tensor crashes ("normal_kernel_cpu not implemented
-    # for 'Char'"). fp16 heads also mirror EAGLE's fp16 draft head and keep the
+    # for 'Char'"). fp16 heads also mirror EAGLE's fp16 draft model and keep the
     # confidence scores un-degraded.
     skip = ["medusa_head", "lm_head"]
     if load_in_4bit:
@@ -211,7 +212,7 @@ class Collector:
         self.selection = selection
         self.prompt_id = 0
         self._steps: List[DecodeStep] = []
-        self._t = 0                              # GLOBAL step index (cold start at t==0)
+        self._t = 0                              # global step index (cold start at t==0)
         gran = "node" if selection == "greedy_node" else "headk"
         self._hist = dtp.DTPHist(granularity=gran)
         self._pending: Optional[Dict[str, Any]] = None
@@ -289,7 +290,7 @@ class Collector:
             edited_rows = invalidate_paths(col._pristine_rows, kept_idx)
             kept_nodes, new_index_of = record_kept(col._meta, kept_idx)
 
-            # mutate the shared static buffer IN PLACE (from pristine), so
+            # mutate the shared static buffer in place (from pristine), so
             # tree_decoding + update_inference_inputs in this same iteration see the gate.
             retrieve_indices.copy_(torch.tensor(
                 edited_rows, dtype=retrieve_indices.dtype, device=retrieve_indices.device,
@@ -347,7 +348,7 @@ class Collector:
                     sample_token_str=p["sample_token_str"],
                 )
                 col._steps.append(step)
-                # causal update: fold THIS step's verified accepts in, STATIC kp/pp
+                # causal update: fold this step's verified accepts in, static kp/pp
                 col._hist.update(step, col._kp, col._pp)
                 col._t += 1
                 col._pending = None
@@ -373,7 +374,7 @@ def collect(
     """Run DTP-gated MEDUSA over ``prompts`` (one persistent collector) -> a ``Trace``.
 
     ``L`` / ``selection`` are the collection-side pruning knobs, fed straight into the
-    in-loop ``dtp.select_kept`` (the SAME DTP the CPU driver replays):
+    in-loop ``dtp.select_kept`` (the same DTP the CPU driver replays):
       - gated (headline)  : ``selection="greedy_headk", L=4`` -- LP-Spec at its optimum.
       - full-tree (ungated): ``selection="full"`` -- verify every node each step, real
         accepts recorded; the MEDUSA analog of the EAGLE collector's ``sigma_th=-inf``,
